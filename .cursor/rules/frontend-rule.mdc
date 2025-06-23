@@ -11,3 +11,31 @@ alwaysApply: false
 - You should use Next.js as it works best with Vercel. 
 - This frontend will ultimately be deployed on Vercel, but it should be possible to test locally. 
 - Always provide users with a way to run the created UI once you have created it.
+
+### Design System: Cosmic Dream
+
+#### Color Palette
+*   **Primary (Core & Accents)**
+    *   `--primary`: `#C9A86E` (Soft Gold)
+    *   `--primary-hover`: `#B89A6A` (Darker Soft Gold)
+    *   `--primary-text`: `#4A4A4A` (Deep Warm Grey)
+*   **Neutrals (Backgrounds, Text, Borders)**
+    *   `--background`: `#FBF8F3` (Creamy Linen)
+    *   `--surface`: `#FFFFFF` (Pure White)
+    *   `--text-primary`: `#5C5B5A` (Warm Grey)
+    *   `--text-secondary`: `#A09D9A` (Soft Silver Grey)
+    *   `--border`: `#EAE5DD` (Light Parchment)
+*   **Accents (Secondary & Status)**
+    *   `--accent-purple`: `#BFC0CF` (Moonstone Grey)
+    *   `--accent-blue`: `#B4C2CB` (Whispy Blue)
+    *   `--accent-pink`: `#D7B3BC` (Muted Rose)
+    *   `--accent-error`: `#E57373` (Soft Red)
+
+#### Typography
+*   **Font Families**
+    *   **Headings**: `Lora` or `Cormorant Garamond`
+    *   **Body & UI**: `Lato` or `Montserrat`
+*   **Font Styling**
+    *   **Headings**: Use the heading font with `--text-primary` color.
+    *   **Body Text**: Use the body font with `--text-primary` color.
+    *   **Buttons**: Use the body font with a bolder weight (500-600).
