@@ -9,6 +9,7 @@ This module implements A/B testing using Langfuse's recommended approach:
 
 import random
 import logging
+import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from langfuse import Langfuse
@@ -54,13 +55,17 @@ class ABTestManager:
         self._setup_default_tests()
     
     def _setup_default_tests(self):
-        """Set up default A/B test configurations"""
+        """Set up default A/B test configurations from environment variables"""
+        # Get A/B testing configuration from environment
+        ab_testing_enabled = os.getenv("AB_TESTING_ENABLED", "false").lower() == "true"
+        ab_testing_split = float(os.getenv("AB_TESTING_SPLIT", "0.1"))  # Default 10% test traffic
+        
         self.tests = {
             "aethon-personality": ABTestConfig(
-                enabled=False,  # Disabled since we only have one prompt for now
+                enabled=ab_testing_enabled,
                 variants=["prod-a", "prod-b"],
-                weights=[0.9, 0.1],  # 90% prod-a, 10% prod-b
-                description="Test enhanced Aethon personality vs standard (currently disabled)"
+                weights=[1.0 - ab_testing_split, ab_testing_split],  # e.g., 90/10 split
+                description=f"Aethon personality A/B test ({'enabled' if ab_testing_enabled else 'disabled'} via env)"
             )
         }
     

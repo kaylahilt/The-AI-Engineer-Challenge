@@ -20,6 +20,10 @@ export OPENAI_API_KEY="sk-..."
 
 # Optional
 export LANGFUSE_HOST="https://cloud.langfuse.com"
+
+# A/B Testing Configuration
+export AB_TESTING_ENABLED="false"  # Set to "true" to enable
+export AB_TESTING_SPLIT="0.1"      # Test traffic percentage
 ```
 
 ### 3. Verify Connection
@@ -82,16 +86,16 @@ python3 test_prompt_quality.py
 ## 📊 A/B Testing Implementation
 
 ### Current Configuration
-```python
-# In api/ab_testing/ab_manager.py
-TEST_CONFIG = {
-    "aethon-personality": {
-        "enabled": True,
-        "variants": ["prod-a", "prod-b"],
-        "weights": [0.9, 0.1],  # 90/10 traffic split
-        "prompt_name": "aethon-system-prompt"
-    }
-}
+```bash
+# Configure via environment variables
+AB_TESTING_ENABLED="false"  # Currently disabled
+AB_TESTING_SPLIT="0.1"      # 10% test traffic when enabled
+
+# A/B testing is currently DISABLED since we only have one prompt
+# To enable when ready:
+# 1. Create multiple prompt variants in Langfuse
+# 2. Set AB_TESTING_ENABLED="true" in environment
+# 3. Adjust AB_TESTING_SPLIT as needed (0.1 = 10% test traffic)
 ```
 
 ### How It Works

@@ -99,20 +99,30 @@ OPENAI_API_KEY="sk-..."
 
 # Optional
 LANGFUSE_HOST="https://cloud.langfuse.com"
+
+# A/B Testing Configuration (New!)
+AB_TESTING_ENABLED="false"  # Set to "true" to enable A/B testing
+AB_TESTING_SPLIT="0.1"      # Percentage for test variant (0.0-1.0)
 ```
 
 ### **A/B Test Configuration**
-```python
-# Current test configuration (in ab_manager.py)
-TEST_CONFIG = {
-    "aethon-personality": {
-        "enabled": True,
-        "variants": ["prod-a", "prod-b"],
-        "weights": [0.9, 0.1],  # 90/10 split
-        "prompt_name": "aethon-system-prompt"
-    }
-}
+```bash
+# Configure via environment variables (recommended)
+AB_TESTING_ENABLED="false"  # Currently disabled since we have one prompt
+AB_TESTING_SPLIT="0.1"      # 10% test traffic when enabled
+
+# To enable A/B testing:
+# 1. Set AB_TESTING_ENABLED="true"
+# 2. Set AB_TESTING_SPLIT="0.1" (or desired percentage)
+# 3. Create prod-a and prod-b variants in Langfuse
+# 4. Redeploy to Vercel
 ```
+
+**Current Status**: A/B testing is **disabled** since we only have one prompt. When you're ready to test multiple variants:
+
+1. **Create variants** in Langfuse with labels `prod-a` and `prod-b`
+2. **Set environment variables** in Vercel dashboard
+3. **Redeploy** to activate A/B testing
 
 ## 📊 Quality Metrics & Monitoring
 
