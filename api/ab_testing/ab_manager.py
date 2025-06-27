@@ -12,6 +12,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from langfuse import Langfuse
+from prompt_management.aethon_prompt import AETHON_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,10 @@ class ABTestManager:
         """Set up default A/B test configurations"""
         self.tests = {
             "aethon-personality": ABTestConfig(
-                enabled=True,
+                enabled=False,  # Disabled since we only have one prompt for now
                 variants=["prod-a", "prod-b"],
                 weights=[0.9, 0.1],  # 90% prod-a, 10% prod-b
-                description="Test enhanced Aethon personality vs standard"
+                description="Test enhanced Aethon personality vs standard (currently disabled)"
             )
         }
     
@@ -72,10 +73,7 @@ class ABTestManager:
             test_name: Name of the A/B test configuration
             
         Returns:
-            Tuple of (prompt_object, selected_label)
-            
-        Raises:
-            Exception: If prompt cannot be fetched
+            Tuple of (prompt_object_or_content, selected_label)
         """
         # Get the selected variant label
         selected_label = self._select_variant(test_name)
@@ -92,10 +90,31 @@ class ABTestManager:
             
         except Exception as e:
             logger.warning(f"Failed to fetch prompt '{prompt_name}' with label '{selected_label}': {e}")
-            # Fallback to production
-            prompt = self.langfuse.get_prompt(prompt_name, label="production")
-            logger.info(f"Fallback: Using production prompt (version {prompt.version})")
-            return prompt, "production"
+            try:
+                # Try fallback to production
+                prompt = self.langfuse.get_prompt(prompt_name, label="production")
+                logger.info(f"Fallback: Using production prompt (version {prompt.version})")
+                return prompt, "production"
+            except Exception as fallback_error:
+                # Ultimate fallback: use local AETHON_SYSTEM_PROMPT
+                logger.warning(f"Langfuse fallback failed: {fallback_error}")
+                logger.info("Using local AETHON_SYSTEM_PROMPT as final fallback")
+                
+                # Create a mock prompt object with the local content
+                class LocalPrompt:
+                    def __init__(self, content: str):
+                        self.prompt = content
+                        self.version = "local-fallback"
+                        self.config = {
+                            "model": "gpt-4o-mini",
+                            "temperature": 0.7,
+                            "max_tokens": 1000
+                        }
+                    
+                    def compile(self):
+                        return self.prompt
+                
+                return LocalPrompt(AETHON_SYSTEM_PROMPT), "local-fallback"
     
     def _select_variant(self, test_name: str) -> str:
         """
@@ -105,16 +124,16 @@ class ABTestManager:
             test_name: Name of the A/B test
             
         Returns:
-            Selected variant label
+            Selected variant label (defaults to "production" when A/B testing is disabled)
         """
         if test_name not in self.tests:
-            logger.warning(f"A/B test '{test_name}' not found, using production")
+            logger.info(f"A/B test '{test_name}' not found, using single production prompt")
             return "production"
         
         test_config = self.tests[test_name]
         
         if not test_config.enabled:
-            logger.debug(f"A/B test '{test_name}' is disabled, using production")
+            logger.info(f"A/B test '{test_name}' is disabled, using single production prompt")
             return "production"
         
         # Weighted random selection (Langfuse recommended approach)
