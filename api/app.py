@@ -42,6 +42,9 @@ langfuse = None
 ab_manager = None
 prompt_manager = None
 
+# Check if we should require advanced features
+REQUIRE_ADVANCED_FEATURES = os.getenv("REQUIRE_ADVANCED_FEATURES", "true").lower() == "true"
+
 try:
     # Try to initialize Langfuse and A/B testing
     from langfuse import Langfuse
@@ -53,7 +56,19 @@ try:
     prompt_manager = PromptManager()
     logger.info("Advanced features (Langfuse, A/B testing) initialized successfully")
 except Exception as e:
-    logger.warning(f"Advanced features not available: {e}. Using fallback mode.")
+    error_msg = f"Advanced features not available: {e}"
+    if REQUIRE_ADVANCED_FEATURES:
+        logger.error(error_msg)
+        raise RuntimeError(
+            f"{error_msg}\n"
+            "Required environment variables:\n"
+            "- LANGFUSE_PUBLIC_KEY\n"
+            "- LANGFUSE_SECRET_KEY\n"
+            "- LANGFUSE_HOST (optional, defaults to https://cloud.langfuse.com)\n"
+            "Set REQUIRE_ADVANCED_FEATURES=false to run in fallback mode."
+        )
+    else:
+        logger.warning(f"{error_msg}. Using fallback mode.")
 
 # Initialize OpenAI client
 try:

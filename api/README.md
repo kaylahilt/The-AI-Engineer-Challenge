@@ -1,76 +1,118 @@
-# OpenAI Chat API Backend
+# 🧙‍♂️ Aethon AI Assistant API
 
-This is a FastAPI-based backend service that provides a streaming chat interface using OpenAI's API.
+Welcome to the backend that powers Aethon, your whimsical digital sage! This FastAPI-powered service brings wisdom and wonder to your conversations through the magic of AI.
 
-## Prerequisites
+## 🚀 What's This All About?
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- An OpenAI API key
+This is the brain behind Aethon - a sophisticated API that:
+- 🎭 Serves up Aethon's unique personality and wisdom
+- 📊 Tracks conversation quality with Langfuse observability
+- 🧪 Supports A/B testing for prompt improvements
+- ⚡ Falls back gracefully when advanced features aren't available
 
-## Setup
+## 📋 Prerequisites
 
-1. Create a virtual environment (recommended):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows, use: venv\Scripts\activate
-```
+Before you embark on this journey, make sure you have:
+- Python 3.8+ (because we're not barbarians)
+- pip (your trusty package wrangler)
+- An OpenAI API key (your golden ticket to AI land)
+- (Optional) Langfuse account for the full experience
 
-2. Install the required dependencies:
-```bash
-pip install fastapi uvicorn openai pydantic
-```
+## 🛠️ Setup
 
-## Running the Server
-
-1. Make sure you're in the `api` directory:
+### 1. Clone & Navigate
 ```bash
 cd api
 ```
 
-2. Start the server:
+### 2. Create Your Virtual Environment
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure Your Environment
+```bash
+cp env.example .env
+# Now edit .env with your actual values
+```
+
+**Required Environment Variables:**
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `LANGFUSE_PUBLIC_KEY` - For tracking prompt performance
+- `LANGFUSE_SECRET_KEY` - Keep it secret, keep it safe
+- `REQUIRE_ADVANCED_FEATURES` - Set to `false` for simple mode
+
+## 🏃‍♂️ Running the Server
+
+### Local Development
 ```bash
 python app.py
 ```
+Your API will spring to life at `http://localhost:8000` 🎉
 
-The server will start on `http://localhost:8000`
+### Production (Vercel)
+```bash
+vercel --prod
+```
 
-## API Endpoints
+## 🔌 API Endpoints
 
-### Chat Endpoint
-- **URL**: `/api/chat`
-- **Method**: POST
-- **Request Body**:
+### 💬 Chat with Aethon
+- **POST** `/api/chat`
 ```json
 {
-    "developer_message": "string",
-    "user_message": "string",
-    "model": "gpt-4.1-mini",  // optional
-    "api_key": "your-openai-api-key"
+    "message": "Explain quantum physics like I'm five",
+    "user_id": "curious_mind_123"
 }
 ```
-- **Response**: Streaming text response
 
-### Health Check
-- **URL**: `/api/health`
-- **Method**: GET
-- **Response**: `{"status": "ok"}`
+### 🏥 Health Check
+- **GET** `/api/health` - Check if Aethon is feeling well
 
-## API Documentation
+### 🧪 A/B Testing Status
+- **GET** `/api/ab-test/status` - See active experiments
 
-Once the server is running, you can access the interactive API documentation at:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+## 📚 Documentation
 
-## CORS Configuration
+Once running, explore the interactive docs:
+- 🎨 Swagger UI: `http://localhost:8000/docs`
+- 📖 ReDoc: `http://localhost:8000/redoc`
 
-The API is configured to accept requests from any origin (`*`). This can be modified in the `app.py` file if you need to restrict access to specific domains.
+## 🔍 Observability with Langfuse
 
-## Error Handling
+When properly configured, every conversation is tracked for quality:
+1. Response clarity and structure
+2. Personality balance
+3. User satisfaction
 
-The API includes basic error handling for:
-- Invalid API keys
-- OpenAI API errors
-- General server errors
+See `docs/LANGFUSE_SETUP.md` for the full guide!
 
-All errors will return a 500 status code with an error message. 
+## 🚨 Troubleshooting
+
+### "Advanced features not available"
+You're missing Langfuse credentials. Either:
+1. Add them to your `.env` file, or
+2. Set `REQUIRE_ADVANCED_FEATURES=false` for simple mode
+
+### Can't connect to API
+Check that:
+- The server is actually running
+- You're using the right URL
+- CORS isn't blocking you (it shouldn't be)
+
+## 🎯 Pro Tips
+
+- 🧪 Test locally before deploying
+- 📊 Monitor your Langfuse dashboard
+- 🔄 Iterate on prompts based on data
+- 🎨 Keep Aethon's personality balanced
+
+---
+
+*Built with ✨ and a sprinkle of digital wisdom* 
