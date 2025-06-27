@@ -9,10 +9,13 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
 from langfuse import Langfuse
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (optional for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available (e.g., in production), use system environment variables
+    pass
 
 # Configure logging
 logger = logging.getLogger(__name__)
