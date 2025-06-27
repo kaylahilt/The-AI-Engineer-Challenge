@@ -1,46 +1,70 @@
-# Import required FastAPI components for building the API
+"""
+Consolidated Aethon AI Assistant API
+Combines reliability, functionality, and proper error handling
+"""
+
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-# Import Pydantic for data validation and settings management
 from pydantic import BaseModel
-# Import OpenAI client for interacting with OpenAI's API
-from openai import OpenAI
+from typing import Optional
 import os
 import logging
-from typing import Optional
-from prompt_management.prompt_manager import PromptManager, PromptEnvironment
 import hashlib
-import random
-from langfuse.openai import openai  # Use Langfuse-wrapped OpenAI client
-from langfuse import Langfuse
-
-# Import our custom modules
-from ab_testing import ABTestManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI application with a title
+# Initialize FastAPI application
 app = FastAPI(title="Aethon AI Assistant API")
 
-# Configure CORS (Cross-Origin Resource Sharing) middleware
-# This allows the API to be accessed from different domains/origins
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows requests from any origin
-    allow_credentials=True,  # Allows cookies to be included in requests
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers in requests
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Initialize Langfuse and A/B testing
-langfuse = Langfuse()
-ab_manager = ABTestManager(langfuse)
+# Import the Aethon system prompt
+try:
+    from prompt_management.aethon_prompt import AETHON_SYSTEM_PROMPT
+    logger.info("Successfully imported Aethon system prompt")
+except ImportError as e:
+    logger.warning(f"Could not import Aethon prompt: {e}")
+    # Fallback prompt if import fails
+    AETHON_SYSTEM_PROMPT = """You are Aethon, a wise and helpful AI assistant. 
+    You provide thoughtful, accurate responses while maintaining a warm and engaging personality."""
 
-# Define the data model for chat requests using Pydantic
-# This ensures incoming request data is properly validated
+# Initialize advanced features with fallbacks
+langfuse = None
+ab_manager = None
+prompt_manager = None
+
+try:
+    # Try to initialize Langfuse and A/B testing
+    from langfuse import Langfuse
+    from ab_testing.ab_manager import ABTestManager
+    from prompt_management.prompt_manager import PromptManager
+    
+    langfuse = Langfuse()
+    ab_manager = ABTestManager(langfuse)
+    prompt_manager = PromptManager()
+    logger.info("Advanced features (Langfuse, A/B testing) initialized successfully")
+except Exception as e:
+    logger.warning(f"Advanced features not available: {e}. Using fallback mode.")
+
+# Initialize OpenAI client
+try:
+    from openai import OpenAI
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    logger.info("OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
+    openai_client = None
+
+# Define request/response models
 class ChatRequest(BaseModel):
     message: str
     user_id: Optional[str] = "anonymous"
@@ -51,35 +75,73 @@ class ChatResponse(BaseModel):
     conversation_id: str
     prompt_label: Optional[str] = None
     prompt_version: Optional[int] = None
+    mode: Optional[str] = None  # Indicates which mode was used (advanced/fallback)
 
-# Initialize the prompt manager for production-ready prompt management
-prompt_manager = PromptManager()
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy", 
+        "service": "aethon-api",
+        "features": {
+            "langfuse": langfuse is not None,
+            "ab_testing": ab_manager is not None,
+            "openai": openai_client is not None
+        }
+    }
 
-# Initialize clients
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+@app.get("/api/health")
+async def api_health_check():
+    """API health check endpoint"""
+    return {
+        "status": "healthy", 
+        "service": "aethon-api",
+        "version": "consolidated",
+        "features": {
+            "langfuse": langfuse is not None,
+            "ab_testing": ab_manager is not None,
+            "openai": openai_client is not None
+        }
+    }
 
-# Define the main chat endpoint that handles POST requests
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Chat endpoint using Langfuse native A/B testing.
-    
-    This endpoint:
-    1. Uses ABTestManager to select prompt variants
-    2. Automatically tracks everything in Langfuse
-    3. Returns AI responses with experiment metadata
+    Consolidated chat endpoint with advanced features and fallbacks
     """
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not available")
+    
     try:
-        # Get prompt variant using our A/B test manager
+        # Generate conversation ID
+        conversation_id = request.conversation_id or f"conv_{abs(hash(request.user_id + request.message))}"
+        
+        # Try advanced mode first (with A/B testing and Langfuse)
+        if ab_manager and langfuse:
+            try:
+                return await _chat_advanced_mode(request, conversation_id)
+            except Exception as e:
+                logger.warning(f"Advanced mode failed: {e}. Falling back to simple mode.")
+        
+        # Fallback to simple mode
+        return await _chat_simple_mode(request, conversation_id)
+        
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
+
+async def _chat_advanced_mode(request: ChatRequest, conversation_id: str) -> ChatResponse:
+    """Advanced chat mode with A/B testing and Langfuse tracking"""
+    try:
+        from langfuse.openai import openai as langfuse_openai
+        
+        # Get prompt variant using A/B test manager
         prompt, selected_label = ab_manager.get_prompt_variant(
             prompt_name="aethon-system-prompt",
             test_name="aethon-personality"
         )
         
-        # Generate conversation ID if not provided
-        conversation_id = request.conversation_id or f"conv_{hash(request.user_id + request.message)}"
-        
-        # Compile the prompt (add variables here if your prompt has them)
+        # Compile the prompt
         system_prompt = prompt.compile()
         
         # Get metadata for Langfuse tracing
@@ -90,18 +152,16 @@ async def chat(request: ChatRequest):
             conversation_id=conversation_id
         )
         
-        # Use Langfuse-wrapped OpenAI client for automatic tracing and analytics
-        response = openai.chat.completions.create(
+        # Use Langfuse-wrapped OpenAI client
+        response = langfuse_openai.chat.completions.create(
             model=prompt.config.get("model", "gpt-4o-mini"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": request.message}
             ],
             temperature=prompt.config.get("temperature", 0.7),
-            max_tokens=prompt.config.get("max_tokens", 500),
-            # 🔑 KEY: Link prompt to generation for Langfuse analytics
+            max_tokens=prompt.config.get("max_tokens", 1000),
             langfuse_prompt=prompt,
-            # Add metadata for better tracking
             langfuse_metadata=trace_metadata
         )
         
@@ -111,36 +171,65 @@ async def chat(request: ChatRequest):
             response=ai_response,
             conversation_id=conversation_id,
             prompt_label=selected_label,
-            prompt_version=prompt.version
+            prompt_version=prompt.version,
+            mode="advanced"
         )
         
     except Exception as e:
-        logger.error(f"Chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
+        logger.error(f"Advanced mode error: {e}")
+        raise
 
-# Define a health check endpoint to verify API status
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "aethon-api"}
+async def _chat_simple_mode(request: ChatRequest, conversation_id: str) -> ChatResponse:
+    """Simple chat mode using direct OpenAI integration"""
+    try:
+        # Use the local Aethon system prompt
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AETHON_SYSTEM_PROMPT},
+                {"role": "user", "content": request.message}
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        return ChatResponse(
+            response=ai_response,
+            conversation_id=conversation_id,
+            prompt_label="local-aethon",
+            prompt_version=1,
+            mode="simple"
+        )
+        
+    except Exception as e:
+        logger.error(f"Simple mode error: {e}")
+        raise
 
+# A/B Testing endpoints (only available if advanced features are loaded)
 @app.get("/api/ab-test/status")
 async def get_ab_test_status():
     """Get current A/B test configuration"""
+    if not ab_manager:
+        return {"error": "A/B testing not available", "mode": "simple"}
     return ab_manager.get_test_status()
 
 @app.get("/api/ab-test/status/{test_name}")
 async def get_specific_test_status(test_name: str):
     """Get status of a specific A/B test"""
+    if not ab_manager:
+        return {"error": "A/B testing not available", "mode": "simple"}
     return ab_manager.get_test_status(test_name)
 
 @app.post("/api/ab-test/toggle/{test_name}")
 async def toggle_ab_test(test_name: str, enabled: bool):
     """Enable/disable an A/B test"""
+    if not ab_manager:
+        raise HTTPException(status_code=503, detail="A/B testing not available")
     return ab_manager.toggle_test(test_name, enabled)
 
-# Entry point for running the application directly
+# For local testing
 if __name__ == "__main__":
     import uvicorn
-    # Start the server on all network interfaces (0.0.0.0) on port 8000
     uvicorn.run(app, host="0.0.0.0", port=8000)
