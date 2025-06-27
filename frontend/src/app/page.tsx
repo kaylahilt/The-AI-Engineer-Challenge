@@ -15,10 +15,8 @@ export default function Home() {
     setError("");
     setResponse("");
 
-
-
     try {
-      const res = await fetch("https://the-ai-engineer-challenge-bice.vercel.app/api/chat", {
+      const res = await fetch("https://api-nub7bjv5f-kayla-hiltermanns-projects.vercel.app/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -32,18 +30,8 @@ export default function Home() {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error("Failed to get response reader");
-      }
-      
-      const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        setResponse((prev) => prev + chunk);
-      }
+      const data = await res.json();
+      setResponse(data.response);
     } catch (err: any) {
       setError(
         `Failed to get response: ${err.message}. Is the backend server running?`
@@ -62,10 +50,6 @@ export default function Home() {
         </p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-
-
-
-
           <div className={styles.inputGroup}>
             <label htmlFor="userMessage">Your Message</label>
             <textarea
