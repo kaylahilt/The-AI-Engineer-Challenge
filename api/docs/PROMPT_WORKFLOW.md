@@ -1,6 +1,6 @@
-# 🎯 Langfuse Prompt Versioning Workflow
+# 🎯 Langfuse Prompt Management & A/B Testing Workflow
 
-This document outlines the **operationally rigorous workflow** for managing, testing, and deploying prompt changes using Langfuse.
+This document outlines the **current implementation** for managing prompts and A/B testing using Langfuse native features.
 
 ## 🏗️ Environment Setup
 
@@ -22,219 +22,225 @@ export OPENAI_API_KEY="sk-..."
 export LANGFUSE_HOST="https://cloud.langfuse.com"
 ```
 
-### 3. Initial Deployment
+### 3. Verify Connection
 ```bash
+# Test the connection
 cd api
-python3 -m prompt_management.manage_prompts setup-aethon --promote
-```
-
-## 🔄 Development Workflow
-
-### Phase 1: Development
-**Goal**: Create and test new prompt versions safely
-
-```bash
-# 1. Edit your prompt in aethon_prompt.py
-# 2. Create new version in development (Langfuse auto-increments version)
-python3 -m prompt_management.manage_prompts create aethon-system-prompt \
-  --file prompt_management/aethon_prompt.py \
-  --model gpt-4.1-nano \
-  --temperature 0.7 \
-  --environment development \
-  --description "Improved reasoning and reduced hallucinations" \
-  --notes "Added better context handling based on user feedback"
-
-# 3. Test locally
 python3 test_prompt_quality.py
 ```
 
-### Phase 2: Staging
-**Goal**: Validate prompt changes in a production-like environment
+## 🔄 Current Workflow
 
-```bash
-# 1. Promote to staging
-python3 -m prompt_management.manage_prompts promote aethon-system-prompt \
-  --from-env development \
-  --to-env staging
+### Phase 1: Development
+**Goal**: Test prompt changes locally before deployment
 
-# 2. Run comprehensive tests
-python3 test_prompt_quality.py > staging_test_results.md
-
-# 3. Manual testing (optional)
-python3 -m prompt_management.manage_prompts get aethon-system-prompt \
-  --environment staging \
-  --show-content
+```python
+# Edit prompts in prompt_management/aethon_prompt.py
+# Test locally using the quality tester
+python3 test_prompt_quality.py
 ```
 
-### Phase 3: Production
-**Goal**: Deploy only after thorough validation
+### Phase 2: Production A/B Testing
+**Goal**: Deploy and test with real users using Langfuse native A/B testing
+
+```python
+# A/B testing is automatic via ABTestManager
+# Variants are managed through Langfuse labels: prod-a, prod-b
+# Traffic split: 90% prod-a, 10% prod-b
+```
+
+### Phase 3: Monitoring & Optimization
+**Goal**: Monitor performance and iterate based on real data
 
 ```bash
-# 1. Review test results
-cat staging_test_results.md
+# Check A/B test status
+curl "localhost:8000/api/ab-test/status/aethon-personality"
 
-# 2. If tests pass (>80% pass rate), promote to production
-python3 -m prompt_management.manage_prompts promote aethon-system-prompt \
-  --from-env staging \
-  --to-env production
-
-# 3. Verify production deployment
-python3 -m prompt_management.manage_prompts get aethon-system-prompt \
-  --environment production \
-  --show-config
+# Monitor in Langfuse dashboard
+# Compare metrics between prod-a and prod-b variants
 ```
 
 ## 🧪 Quality Assurance Process
 
 ### Automated Testing
-Run the quality test suite before any promotion:
-
-```bash
-# Test all environments
+```python
+# Run quality tests (current implementation)
 python3 test_prompt_quality.py
 
-# Test specific environment
-python3 -c "
-from test_prompt_quality import PromptQualityTester
-from prompt_management import PromptEnvironment
-tester = PromptQualityTester()
-result = tester.test_prompt_environment('aethon-system-prompt', PromptEnvironment.STAGING)
-print(f'Pass rate: {result[\"overall_pass_rate\"]:.1%}')
-"
+# Tests evaluate:
+# 1. Basic Greeting - Personality introduction
+# 2. Complex Question - Wisdom and practical advice  
+# 3. Technical Question - Metaphor usage and accessibility
+# 4. Philosophical Question - Spiritual depth and intellectual grace
 ```
 
-### Quality Gates
-- **Development → Staging**: No specific requirements (experimentation phase)
-- **Staging → Production**: Minimum 80% pass rate on quality tests
-- **Production**: Monitor performance metrics in Langfuse dashboard
+### A/B Testing Quality Gates
+- **Automatic Monitoring**: Langfuse dashboard tracks latency, cost, errors
+- **Statistical Significance**: Monitor conversion metrics over time
+- **Quality Thresholds**: Set alerts for performance degradation
 
-### Test Cases
-The quality tester evaluates:
-1. **Basic Greeting**: Tests personality introduction
-2. **Complex Question**: Tests wisdom and practical advice
-3. **Technical Question**: Tests metaphor usage and accessibility
-4. **Philosophical Question**: Tests spiritual depth and intellectual grace
+## 📊 A/B Testing Implementation
 
-## 📊 Monitoring & Rollback
+### Current Configuration
+```python
+# In api/ab_testing/ab_manager.py
+TEST_CONFIG = {
+    "aethon-personality": {
+        "enabled": True,
+        "variants": ["prod-a", "prod-b"],
+        "weights": [0.9, 0.1],  # 90/10 traffic split
+        "prompt_name": "aethon-system-prompt"
+    }
+}
+```
 
-### Monitoring
-1. **Langfuse Dashboard**: Monitor cost, latency, and usage patterns
-2. **Quality Metrics**: Track response quality over time
-3. **User Feedback**: Collect and analyze user satisfaction
+### How It Works
+1. **Variant Selection**: Weighted random choice between `prod-a` and `prod-b`
+2. **Prompt Fetching**: `langfuse.get_prompt(name, label=selected_label)`
+3. **Automatic Tracing**: `langfuse.openai` wrapper tracks all interactions
+4. **Analytics**: Dashboard compares performance between variants
 
-### Rollback Process
-If issues are detected in production:
-
-```bash
-# 1. Identify last known good version
-python3 -m prompt_management.manage_prompts list-versions aethon-system-prompt
-
-# 2. Promote previous version to production
-python3 -m prompt_management.manage_prompts promote aethon-system-prompt-v1.0.0 \
-  --from-env staging \
-  --to-env production
-
-# 3. Verify rollback
-python3 test_prompt_quality.py
+### Managing Variants
+```python
+# Variants are managed through Langfuse UI or API
+# Create different versions and assign labels:
+# - Version 1 → label "prod-a" (current production)
+# - Version 2 → label "prod-b" (test variant)
 ```
 
 ## 🔧 Configuration Management
 
 ### Model Parameters
-Manage these through Langfuse configuration:
+Current configuration in the system:
 
 ```python
-config = PromptConfig(
-    model="gpt-4.1-nano",           # Model selection
-    temperature=0.7,                # Creativity vs consistency
-    max_tokens=1000,                # Response length limit
-    top_p=1.0,                      # Nucleus sampling
-    frequency_penalty=0.0,          # Repetition control
-    presence_penalty=0.0,           # Topic diversity
-    description="Version description",
-    version_notes="Change details"
-)
+# Model settings (in app.py)
+model="gpt-4o-mini"
+temperature=0.7
+max_tokens=1000
 ```
 
-### A/B Testing
-For comparing prompt versions:
+### Prompt Structure
+```python
+# System prompt loaded from aethon_prompt.py
+def create_system_prompt():
+    return """You are Aethon, a digital sage..."""
+```
 
+## 📊 Monitoring & Analytics
+
+### Langfuse Dashboard Metrics
+- **Latency**: Response time by variant
+- **Cost**: Token usage and API costs per variant
+- **Volume**: Request patterns and traffic distribution
+- **Quality**: Custom evaluation scores
+
+### API Endpoints
 ```bash
-# Deploy version A to staging
-python3 -m prompt_management.manage_prompts create aethon-v2a \
-  --content "Version A content..." \
-  --environment staging
+# Check A/B test status
+GET /api/ab-test/status/aethon-personality
 
-# Deploy version B to development  
-python3 -m prompt_management.manage_prompts create aethon-v2b \
-  --content "Version B content..." \
-  --environment development
-
-# Compare results
-python3 test_prompt_quality.py
+# Toggle A/B testing
+POST /api/ab-test/toggle/aethon-personality
+Content-Type: application/json
+{"enabled": true/false}
 ```
 
 ## 🚨 Emergency Procedures
 
 ### Immediate Issues
-1. **Rollback to last known good version**
-2. **Check Langfuse logs for error patterns**
-3. **Verify OpenAI API status**
+```bash
+# 1. Disable A/B testing (fallback to prod-a only)
+curl -X POST "localhost:8000/api/ab-test/toggle/aethon-personality" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
 
-### Investigation
-1. **Review quality test results**
-2. **Check configuration changes**
-3. **Analyze user feedback patterns**
+# 2. Check system status
+curl "localhost:8000/api/ab-test/status/aethon-personality"
 
-## 📋 Checklist for Prompt Changes
+# 3. Verify Langfuse connection
+python3 -c "
+from langfuse import Langfuse
+langfuse = Langfuse()
+print('Connection:', 'OK' if langfuse.auth_check() else 'FAILED')
+"
+```
 
-### Before Development
-- [ ] Define clear success criteria
-- [ ] Update test cases if needed
-- [ ] Document expected changes
+### Rollback Process
+1. **Disable A/B testing** to stop traffic to problematic variant
+2. **Check Langfuse traces** for error patterns
+3. **Update prompt labels** if needed through Langfuse UI
+4. **Re-enable testing** once issues are resolved
 
-### Before Staging
-- [ ] All development tests pass
-- [ ] Code review completed
-- [ ] Version notes documented
+## 📋 Development Checklist
+
+### Before Making Changes
+- [ ] Understand current prompt performance baseline
+- [ ] Define success criteria for changes
+- [ ] Plan testing approach
+
+### During Development
+- [ ] Edit prompts in `prompt_management/aethon_prompt.py`
+- [ ] Test locally with `test_prompt_quality.py`
+- [ ] Verify no syntax or logical errors
 
 ### Before Production
-- [ ] Staging tests pass (>80%)
-- [ ] Manual testing completed
-- [ ] Stakeholder approval obtained
-- [ ] Rollback plan prepared
+- [ ] Create new prompt version in Langfuse
+- [ ] Assign appropriate label (`prod-b` for testing)
+- [ ] Monitor initial traffic for issues
+- [ ] Set up alerts for key metrics
 
-### After Production
-- [ ] Monitor metrics for 24 hours
-- [ ] Collect user feedback
-- [ ] Document lessons learned
+### After Deployment
+- [ ] Monitor A/B test results in Langfuse dashboard
+- [ ] Track statistical significance
+- [ ] Document findings and decisions
+- [ ] Plan next iteration based on results
 
 ## 🎓 Best Practices
 
-1. **Version Semantically**: Use semantic versioning (1.0.0, 1.1.0, 2.0.0)
-2. **Test Thoroughly**: Never skip staging environment
-3. **Document Changes**: Always include meaningful version notes
-4. **Monitor Continuously**: Watch metrics after each deployment
-5. **Fail Fast**: Use quality gates to catch issues early
-6. **Keep History**: Maintain old versions for rollback capability
+### Prompt Versioning
+1. **Use Semantic Labels**: `prod-a` (stable), `prod-b` (test), `dev` (development)
+2. **Document Changes**: Include clear descriptions in Langfuse
+3. **Gradual Rollout**: Start with small traffic percentages
+4. **Monitor Closely**: Watch metrics for first 24-48 hours
+
+### A/B Testing
+1. **Statistical Rigor**: Wait for sufficient sample size
+2. **Single Variable**: Test one change at a time
+3. **Clear Hypotheses**: Define what success looks like
+4. **Time Boundaries**: Set test duration limits
+
+### Emergency Response
+1. **Quick Disable**: Always have a way to quickly disable tests
+2. **Monitoring Alerts**: Set up automated alerts for key metrics
+3. **Rollback Plan**: Know how to revert changes quickly
+4. **Communication**: Keep stakeholders informed of issues
 
 ## 🔗 Quick Reference
 
+### Key Files
+- `api/app.py` - Main FastAPI application with A/B testing integration
+- `api/ab_testing/ab_manager.py` - A/B testing logic and configuration
+- `api/prompt_management/aethon_prompt.py` - System prompt definition
+- `api/test_prompt_quality.py` - Quality testing suite
+
+### Key Commands
 ```bash
-# Health check
-python3 -m prompt_management.manage_prompts health
-
-# Create prompt
-python3 -m prompt_management.manage_prompts create [name] --content "..." --environment development
-
-# Promote prompt
-python3 -m prompt_management.manage_prompts promote [name] --from-env staging --to-env production
-
-# Get prompt
-python3 -m prompt_management.manage_prompts get [name] --environment production --show-content
-
-# Test quality
+# Test prompt quality
 python3 test_prompt_quality.py
+
+# Check A/B test status
+curl "localhost:8000/api/ab-test/status/aethon-personality"
+
+# Start development server
+python3 -m uvicorn app:app --reload --port 8000
 ```
 
-This workflow ensures **reliable, traceable, and reversible** prompt deployments while maintaining high quality standards. 
+### Key URLs
+- **Langfuse Dashboard**: https://cloud.langfuse.com
+- **Local API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+---
+
+*This workflow reflects the current implementation using Langfuse native A/B testing. For evaluation strategies, see `EVALUATION_RECOMMENDATIONS.md`.* 
