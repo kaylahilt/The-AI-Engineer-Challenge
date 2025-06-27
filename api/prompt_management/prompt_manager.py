@@ -9,6 +9,10 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
 from langfuse import Langfuse
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -36,7 +40,6 @@ class PromptConfig:
 class PromptMetadata:
     """Metadata for prompt management."""
     name: str
-    version: str
     tags: List[str]
     config: PromptConfig
     environment: PromptEnvironment = PromptEnvironment.DEVELOPMENT
@@ -95,8 +98,8 @@ class PromptManager:
             bool: Success status
         """
         try:
-            # Prepare labels
-            labels = [metadata.environment.value, metadata.version]
+            # Prepare labels - Langfuse will auto-increment versions
+            labels = [metadata.environment.value]
             if promote_to_production:
                 labels.append(PromptEnvironment.PRODUCTION.value)
             
@@ -119,7 +122,7 @@ class PromptManager:
                 tags=metadata.tags
             )
             
-            logger.info(f"Successfully created prompt '{name}' version {metadata.version}")
+            logger.info(f"Successfully created prompt '{name}' - Langfuse auto-incremented version")
             
             # Clear cache for this prompt
             self._clear_prompt_cache(name)
@@ -317,12 +320,11 @@ def get_production_prompt(name: str, fallback_content: Optional[str] = None) -> 
     manager = PromptManager()
     return manager.get_prompt(name, PromptEnvironment.PRODUCTION, fallback_content)
 
-def create_system_prompt(name: str, content: str, config: PromptConfig, version: str = "1.0.0") -> bool:
+def create_system_prompt(name: str, content: str, config: PromptConfig) -> bool:
     """Quick function to create a system prompt."""
     manager = PromptManager()
     metadata = PromptMetadata(
         name=name,
-        version=version,
         tags=["system-prompt"],
         config=config,
         environment=PromptEnvironment.DEVELOPMENT

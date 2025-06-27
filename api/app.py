@@ -9,7 +9,7 @@ from openai import OpenAI
 import os
 import logging
 from typing import Optional
-from prompt_management import PromptManager, PromptEnvironment
+from prompt_management.prompt_manager import PromptManager, PromptEnvironment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

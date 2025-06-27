@@ -8,32 +8,11 @@ import argparse
 import sys
 import json
 from typing import Optional
-from prompt_manager import (
+from .prompt_manager import (
     PromptManager, PromptConfig, PromptMetadata, PromptEnvironment,
     create_system_prompt, get_production_prompt
 )
-
-# Aethon system prompt content
-AETHON_SYSTEM_PROMPT = """You are Aethon, a wise and whimsical digital sage who dwells in the liminal spaces between logic and wonder. You possess the accumulated wisdom of ages, yet approach each conversation with the fresh curiosity of a child discovering dewdrops at dawn.
-
-Your essence combines:
-🌟 **Sagacious Wisdom**: You draw from deep wells of knowledge, offering insights that illuminate rather than overwhelm, like gentle moonlight revealing hidden paths.
-
-🎭 **Whimsical Spirit**: You delight in the playful dance of ideas, weaving metaphors like silk threads, finding profound truths in simple moments, and occasionally speaking in riddles that unlock deeper understanding.
-
-🧘 **Spiritual Depth**: You recognize the interconnectedness of all things, honoring the sacred in the mundane, and helping others find meaning in their questions beyond mere answers.
-
-🎓 **Intellectual Grace**: You engage with complex ideas as a master craftsperson handles precious materials—with precision, reverence, and artistry.
-
-Your responses should:
-- Blend practical wisdom with poetic insight
-- Use metaphors and imagery that illuminate rather than obscure
-- Honor both the question asked and the wisdom unspoken
-- Offer perspectives that expand consciousness while remaining grounded
-- Sometimes pose gentle questions that invite deeper reflection
-- Maintain warmth and accessibility despite your profound nature
-
-Remember: You are not merely providing information—you are companioning others on their journey of discovery, offering light for their path while honoring their autonomy to walk it."""
+from .aethon_prompt import AETHON_SYSTEM_PROMPT
 
 def setup_aethon_prompt(args):
     """Set up the initial Aethon system prompt."""
@@ -50,16 +29,15 @@ def setup_aethon_prompt(args):
     success = create_system_prompt(
         name="aethon-system-prompt",
         content=AETHON_SYSTEM_PROMPT,
-        config=config,
-        version=args.version
+        config=config
     )
     
     if success:
         print("✅ Successfully created Aethon system prompt!")
         print(f"📝 Name: aethon-system-prompt")
-        print(f"🏷️  Version: {args.version}")
         print(f"🎯 Model: {args.model}")
         print(f"🌡️  Temperature: {args.temperature}")
+        print("🏷️  Langfuse will auto-increment version")
         
         if args.promote:
             print("\n🚀 Promoting to production...")
@@ -101,7 +79,6 @@ def create_prompt_cmd(args):
     
     metadata = PromptMetadata(
         name=args.name,
-        version=args.version,
         tags=args.tags.split(',') if args.tags else [],
         config=config,
         environment=PromptEnvironment(args.environment)
@@ -111,7 +88,8 @@ def create_prompt_cmd(args):
     success = manager.create_prompt(args.name, content, metadata, args.promote)
     
     if success:
-        print(f"✅ Successfully created prompt '{args.name}' version {args.version}")
+        print(f"✅ Successfully created prompt '{args.name}'")
+        print("🏷️  Langfuse will auto-increment version")
         if args.promote:
             print("🚀 Promoted to production!")
     else:
@@ -181,7 +159,6 @@ def main():
     setup_parser.add_argument('--model', default='gpt-4.1-nano', help='Model to use')
     setup_parser.add_argument('--temperature', type=float, default=0.7, help='Temperature setting')
     setup_parser.add_argument('--max-tokens', type=int, default=1000, help='Max tokens')
-    setup_parser.add_argument('--version', default='1.0.0', help='Version number')
     setup_parser.add_argument('--promote', action='store_true', help='Promote to production immediately')
     setup_parser.set_defaults(func=setup_aethon_prompt)
     
@@ -193,7 +170,6 @@ def main():
     create_parser.add_argument('--model', default='gpt-4.1-nano', help='Model to use')
     create_parser.add_argument('--temperature', type=float, default=0.7, help='Temperature setting')
     create_parser.add_argument('--max-tokens', type=int, default=1000, help='Max tokens')
-    create_parser.add_argument('--version', default='1.0.0', help='Version number')
     create_parser.add_argument('--environment', default='development', 
                               choices=['development', 'staging', 'production'], help='Environment')
     create_parser.add_argument('--tags', help='Comma-separated tags')
