@@ -24,7 +24,7 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user_message: userMessage,
+          message: userMessage,
         }),
       });
 
