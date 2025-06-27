@@ -10,13 +10,20 @@ import os
 import logging
 from typing import Optional
 from prompt_management.prompt_manager import PromptManager, PromptEnvironment
+import hashlib
+import random
+from langfuse.openai import openai  # Use Langfuse-wrapped OpenAI client
+from langfuse import Langfuse
+
+# Import our custom modules
+from ab_testing import ABTestManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI application with a title
-app = FastAPI(title="OpenAI Chat API")
+app = FastAPI(title="Aethon AI Assistant API")
 
 # Configure CORS (Cross-Origin Resource Sharing) middleware
 # This allows the API to be accessed from different domains/origins
@@ -28,80 +35,109 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers in requests
 )
 
+# Initialize Langfuse and A/B testing
+langfuse = Langfuse()
+ab_manager = ABTestManager(langfuse)
+
 # Define the data model for chat requests using Pydantic
 # This ensures incoming request data is properly validated
 class ChatRequest(BaseModel):
-    user_message: str      # Message from the user
-    model: Optional[str] = "gpt-4.1-nano"  # Optional model selection with default
+    message: str
+    user_id: Optional[str] = "anonymous"
+    conversation_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    conversation_id: str
+    prompt_label: Optional[str] = None
+    prompt_version: Optional[int] = None
 
 # Initialize the prompt manager for production-ready prompt management
 prompt_manager = PromptManager()
 
+# Initialize clients
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 # Define the main chat endpoint that handles POST requests
-@app.post("/api/chat")
+@app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    """
+    Chat endpoint using Langfuse native A/B testing.
+    
+    This endpoint:
+    1. Uses ABTestManager to select prompt variants
+    2. Automatically tracks everything in Langfuse
+    3. Returns AI responses with experiment metadata
+    """
     try:
-        # Get OpenAI API key from environment variable
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-        
-        # Get the system prompt from Langfuse (no fallback - fail fast if not configured)
-        prompt_data = prompt_manager.get_prompt(
-            name="aethon-system-prompt",
-            environment=PromptEnvironment.PRODUCTION
+        # Get prompt variant using our A/B test manager
+        prompt, selected_label = ab_manager.get_prompt_variant(
+            prompt_name="aethon-system-prompt",
+            test_name="aethon-personality"
         )
         
-        if not prompt_data:
-            logger.error("Aethon system prompt not found in Langfuse production environment")
-            raise HTTPException(
-                status_code=503, 
-                detail="AI system is temporarily unavailable. Please ensure prompts are properly configured in Langfuse."
-            )
+        # Generate conversation ID if not provided
+        conversation_id = request.conversation_id or f"conv_{hash(request.user_id + request.message)}"
         
-        system_prompt = prompt_data["content"]
-        # Use configuration from Langfuse
-        prompt_config = prompt_data.get("config", {})
-        model = prompt_config.get("model", request.model)
-        temperature = prompt_config.get("temperature", 0.7)
-        max_tokens = prompt_config.get("max_tokens", 1000)
+        # Compile the prompt (add variables here if your prompt has them)
+        system_prompt = prompt.compile()
         
-        logger.info(f"Using prompt version: {prompt_data['version']}, model: {model}, temp: {temperature}")
+        # Get metadata for Langfuse tracing
+        trace_metadata = ab_manager.get_metadata_for_trace(
+            test_name="aethon-personality",
+            selected_label=selected_label,
+            user_id=request.user_id,
+            conversation_id=conversation_id
+        )
         
-        # Initialize OpenAI client with the environment API key
-        client = OpenAI(api_key=api_key)
+        # Use Langfuse-wrapped OpenAI client for automatic tracing and analytics
+        response = openai.chat.completions.create(
+            model=prompt.config.get("model", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.message}
+            ],
+            temperature=prompt.config.get("temperature", 0.7),
+            max_tokens=prompt.config.get("max_tokens", 500),
+            # 🔑 KEY: Link prompt to generation for Langfuse analytics
+            langfuse_prompt=prompt,
+            # Add metadata for better tracking
+            langfuse_metadata=trace_metadata
+        )
         
-        # Create an async generator function for streaming responses
-        async def generate():
-            # Create a streaming chat completion request with the managed system prompt
-            stream = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": request.user_message}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True  # Enable streaming response
-            )
-            
-            # Yield each chunk of the response as it becomes available
-            for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
-
-        # Return a streaming response to the client
-        return StreamingResponse(generate(), media_type="text/plain")
-    
+        ai_response = response.choices[0].message.content
+        
+        return ChatResponse(
+            response=ai_response,
+            conversation_id=conversation_id,
+            prompt_label=selected_label,
+            prompt_version=prompt.version
+        )
+        
     except Exception as e:
-        # Handle any errors that occur during processing
         logger.error(f"Chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
 
 # Define a health check endpoint to verify API status
-@app.get("/api/health")
+@app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "aethon-api"}
+
+@app.get("/api/ab-test/status")
+async def get_ab_test_status():
+    """Get current A/B test configuration"""
+    return ab_manager.get_test_status()
+
+@app.get("/api/ab-test/status/{test_name}")
+async def get_specific_test_status(test_name: str):
+    """Get status of a specific A/B test"""
+    return ab_manager.get_test_status(test_name)
+
+@app.post("/api/ab-test/toggle/{test_name}")
+async def toggle_ab_test(test_name: str, enabled: bool):
+    """Enable/disable an A/B test"""
+    return ab_manager.toggle_test(test_name, enabled)
 
 # Entry point for running the application directly
 if __name__ == "__main__":
