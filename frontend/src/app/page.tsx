@@ -4,7 +4,6 @@ import { useState, FormEvent } from "react";
 import styles from "./page.module.css";
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState("");
   const [developerMessage, setDeveloperMessage] = useState(
     "You are a helpful assistant."
   );
@@ -19,11 +18,7 @@ export default function Home() {
     setError("");
     setResponse("");
 
-    if (!apiKey) {
-      setError("Please enter your OpenAI API key.");
-      setIsLoading(false);
-      return;
-    }
+
 
     try {
       const res = await fetch("https://the-ai-engineer-challenge-bice.vercel.app/api/chat", {
@@ -32,7 +27,6 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          api_key: apiKey,
           developer_message: developerMessage,
           user_message: userMessage,
         }),
@@ -68,21 +62,11 @@ export default function Home() {
       <div className={styles.container}>
         <h1 className={styles.title}>AI-Engineer-Challenge Chat</h1>
         <p className={styles.description}>
-          Provide the messages below and your OpenAI API key to start a chat.
+          Provide the messages below to start a chat with AI.
         </p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.inputGroup}>
-            <label htmlFor="apiKey">OpenAI API Key</label>
-            <input
-              type="password"
-              id="apiKey"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your OpenAI API key"
-              required
-            />
-          </div>
+
 
           <div className={styles.inputGroup}>
             <label htmlFor="developerMessage">Developer Message</label>
