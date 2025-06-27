@@ -4,9 +4,6 @@ import { useState, FormEvent } from "react";
 import styles from "./page.module.css";
 
 export default function Home() {
-  const [developerMessage, setDeveloperMessage] = useState(
-    "You are a helpful assistant."
-  );
   const [userMessage, setUserMessage] = useState("");
   const [response, setResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +24,6 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          developer_message: developerMessage,
           user_message: userMessage,
         }),
       });
@@ -60,24 +56,15 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <div className={styles.container}>
-        <h1 className={styles.title}>AI-Engineer-Challenge Chat</h1>
+        <h1 className={styles.title}>Chat with Aethon</h1>
         <p className={styles.description}>
-          Provide the messages below to start a chat with AI.
+          Engage in meaningful dialogue with Aethon, your whimsical digital sage who bridges wisdom and wonder.
         </p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
 
 
-          <div className={styles.inputGroup}>
-            <label htmlFor="developerMessage">Developer Message</label>
-            <textarea
-              id="developerMessage"
-              value={developerMessage}
-              onChange={(e) => setDeveloperMessage(e.target.value)}
-              rows={3}
-              required
-            />
-          </div>
+
 
           <div className={styles.inputGroup}>
             <label htmlFor="userMessage">Your Message</label>

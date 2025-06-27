@@ -7,7 +7,13 @@ from pydantic import BaseModel
 # Import OpenAI client for interacting with OpenAI's API
 from openai import OpenAI
 import os
+import logging
 from typing import Optional
+from prompt_management import PromptManager, PromptEnvironment
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI application with a title
 app = FastAPI(title="OpenAI Chat API")
@@ -25,9 +31,11 @@ app.add_middleware(
 # Define the data model for chat requests using Pydantic
 # This ensures incoming request data is properly validated
 class ChatRequest(BaseModel):
-    developer_message: str  # Message from the developer/system
     user_message: str      # Message from the user
-    model: Optional[str] = "gpt-4o-mini"  # Optional model selection with default
+    model: Optional[str] = "gpt-4.1-nano"  # Optional model selection with default
+
+# Initialize the prompt manager for production-ready prompt management
+prompt_manager = PromptManager()
 
 # Define the main chat endpoint that handles POST requests
 @app.post("/api/chat")
@@ -38,18 +46,42 @@ async def chat(request: ChatRequest):
         if not api_key:
             raise HTTPException(status_code=500, detail="OpenAI API key not configured")
         
+        # Get the system prompt from Langfuse (no fallback - fail fast if not configured)
+        prompt_data = prompt_manager.get_prompt(
+            name="aethon-system-prompt",
+            environment=PromptEnvironment.PRODUCTION
+        )
+        
+        if not prompt_data:
+            logger.error("Aethon system prompt not found in Langfuse production environment")
+            raise HTTPException(
+                status_code=503, 
+                detail="AI system is temporarily unavailable. Please ensure prompts are properly configured in Langfuse."
+            )
+        
+        system_prompt = prompt_data["content"]
+        # Use configuration from Langfuse
+        prompt_config = prompt_data.get("config", {})
+        model = prompt_config.get("model", request.model)
+        temperature = prompt_config.get("temperature", 0.7)
+        max_tokens = prompt_config.get("max_tokens", 1000)
+        
+        logger.info(f"Using prompt version: {prompt_data['version']}, model: {model}, temp: {temperature}")
+        
         # Initialize OpenAI client with the environment API key
         client = OpenAI(api_key=api_key)
         
         # Create an async generator function for streaming responses
         async def generate():
-            # Create a streaming chat completion request
+            # Create a streaming chat completion request with the managed system prompt
             stream = client.chat.completions.create(
-                model=request.model,
+                model=model,
                 messages=[
-                    {"role": "developer", "content": request.developer_message},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": request.user_message}
                 ],
+                temperature=temperature,
+                max_tokens=max_tokens,
                 stream=True  # Enable streaming response
             )
             
@@ -63,6 +95,7 @@ async def chat(request: ChatRequest):
     
     except Exception as e:
         # Handle any errors that occur during processing
+        logger.error(f"Chat endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Define a health check endpoint to verify API status

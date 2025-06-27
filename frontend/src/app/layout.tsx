@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI-Engineer-Challenge Chat",
-  description: "A frontend for the AI Engineer Challenge",
+  title: "Chat with Aethon - Digital Sage",
+  description: "Engage with Aethon, a whimsical digital sage who bridges wisdom and wonder",
 };
 
 export default function RootLayout({
