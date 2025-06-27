@@ -3,14 +3,14 @@
     "builds": [
       { "src": "frontend/package.json", "use": "@vercel/next" },
       { 
-        "src": "api/working_app.py",
+        "src": "api/app.py",
         "use": "@vercel/python"
       }
     ],
     "routes": [
       { 
         "src": "/api/(.*)", 
-        "dest": "api/working_app.py"
+        "dest": "api/app.py"
       },
       { 
         "src": "/(.*)", 
