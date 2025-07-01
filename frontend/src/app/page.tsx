@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -72,7 +74,11 @@ export default function Home() {
         {response && (
           <div className={styles.response}>
             <h2>Response</h2>
-            <p>{response}</p>
+            <div className={styles.markdown}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {response}
+              </ReactMarkdown>
+            </div>
           </div>
         )}
       </div>
