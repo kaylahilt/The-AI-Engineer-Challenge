@@ -11,26 +11,26 @@ export default function Home() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!userMessage.trim()) return;
+
     setIsLoading(true);
     setError("");
     setResponse("");
 
     try {
-      const res = await fetch("https://api-nub7bjv5f-kayla-hiltermanns-projects.vercel.app/api/chat", {
-        method: "POST",
+      const response = await fetch('/api/chat', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: userMessage,
-        }),
+        body: JSON.stringify({ message: userMessage }),
       });
 
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await res.json();
+      const data = await response.json();
       setResponse(data.response);
     } catch (err: any) {
       setError(

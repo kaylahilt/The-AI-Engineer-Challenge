@@ -27,15 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import the Aethon system prompt
-try:
-    from prompt_management.aethon_prompt import AETHON_SYSTEM_PROMPT
-    logger.info("Successfully imported Aethon system prompt")
-except ImportError as e:
-    logger.warning(f"Could not import Aethon prompt: {e}")
-    # Fallback prompt if import fails
-    AETHON_SYSTEM_PROMPT = """You are Aethon, a wise and helpful AI assistant. 
-    You provide thoughtful, accurate responses while maintaining a warm and engaging personality."""
+# DON'T import local prompt - we'll use Langfuse only
+# from prompt_management.aethon_prompt import AETHON_SYSTEM_PROMPT
 
 # Initialize advanced features with fallbacks
 langfuse = None
@@ -122,24 +115,23 @@ async def api_health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Consolidated chat endpoint with advanced features and fallbacks
+    Chat endpoint that requires Langfuse for prompt management
     """
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI client not available")
+    
+    if not ab_manager or not langfuse:
+        raise HTTPException(
+            status_code=500, 
+            detail="Langfuse not initialized. Please check your LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY environment variables."
+        )
     
     try:
         # Generate conversation ID
         conversation_id = request.conversation_id or f"conv_{abs(hash(request.user_id + request.message))}"
         
-        # Try advanced mode first (with A/B testing and Langfuse)
-        if ab_manager and langfuse:
-            try:
-                return await _chat_advanced_mode(request, conversation_id)
-            except Exception as e:
-                logger.warning(f"Advanced mode failed: {e}. Falling back to simple mode.")
-        
-        # Fallback to simple mode
-        return await _chat_simple_mode(request, conversation_id)
+        # Use Langfuse-managed prompts only
+        return await _chat_advanced_mode(request, conversation_id)
         
     except Exception as e:
         logger.error(f"Chat endpoint error: {e}")
@@ -150,8 +142,8 @@ async def _chat_advanced_mode(request: ChatRequest, conversation_id: str) -> Cha
     try:
         from langfuse.openai import openai as langfuse_openai
         
-        # Get prompt variant using A/B test manager
-        prompt, selected_label = ab_manager.get_prompt_variant(
+        # Get prompt variant using A/B test manager (now returns version number)
+        prompt, selected_version = ab_manager.get_prompt_variant(
             prompt_name="aethon-system-prompt",
             test_name="aethon-personality"
         )
@@ -162,7 +154,7 @@ async def _chat_advanced_mode(request: ChatRequest, conversation_id: str) -> Cha
         # Get metadata for Langfuse tracing
         trace_metadata = ab_manager.get_metadata_for_trace(
             test_name="aethon-personality",
-            selected_label=selected_label,
+            selected_version=selected_version,
             user_id=request.user_id,
             conversation_id=conversation_id
         )
@@ -185,41 +177,13 @@ async def _chat_advanced_mode(request: ChatRequest, conversation_id: str) -> Cha
         return ChatResponse(
             response=ai_response,
             conversation_id=conversation_id,
-            prompt_label=selected_label,
-            prompt_version=prompt.version,
+            prompt_label=f"version-{selected_version}",  # Changed to show version
+            prompt_version=selected_version if isinstance(selected_version, int) else prompt.version,
             mode="advanced"
         )
         
     except Exception as e:
         logger.error(f"Advanced mode error: {e}")
-        raise
-
-async def _chat_simple_mode(request: ChatRequest, conversation_id: str) -> ChatResponse:
-    """Simple chat mode using direct OpenAI integration"""
-    try:
-        # Use the local Aethon system prompt
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": AETHON_SYSTEM_PROMPT},
-                {"role": "user", "content": request.message}
-            ],
-            temperature=0.7,
-            max_tokens=1000
-        )
-        
-        ai_response = response.choices[0].message.content
-        
-        return ChatResponse(
-            response=ai_response,
-            conversation_id=conversation_id,
-            prompt_label="local-aethon",
-            prompt_version=1,
-            mode="simple"
-        )
-        
-    except Exception as e:
-        logger.error(f"Simple mode error: {e}")
         raise
 
 # A/B Testing endpoints (only available if advanced features are loaded)

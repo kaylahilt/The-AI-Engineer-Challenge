@@ -2,7 +2,7 @@
 A/B Test Manager using Langfuse Native Capabilities
 
 This module implements A/B testing using Langfuse's recommended approach:
-1. Label-based prompt variants (e.g., prod-a, prod-b)
+1. Version-based prompt variants (e.g., version 1, version 2)
 2. Weighted random selection
 3. Automatic analytics via Langfuse dashboard
 """
@@ -10,7 +10,7 @@ This module implements A/B testing using Langfuse's recommended approach:
 import random
 import logging
 import os
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from langfuse import Langfuse
 from prompt_management.aethon_prompt import AETHON_SYSTEM_PROMPT
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ABTestConfig:
     """Configuration for a single A/B test"""
     enabled: bool
-    variants: List[str]
+    variants: List[Union[int, str]]  # Can be version numbers or special labels
     weights: List[float]
     description: Optional[str] = None
     
@@ -38,7 +38,7 @@ class ABTestManager:
     Manages A/B testing using Langfuse native capabilities.
     
     This class provides a clean interface for:
-    - Configuring A/B tests
+    - Configuring A/B tests with version numbers
     - Selecting prompt variants
     - Managing test states
     """
@@ -60,46 +60,48 @@ class ABTestManager:
         ab_testing_enabled = os.getenv("AB_TESTING_ENABLED", "false").lower() == "true"
         ab_testing_split = float(os.getenv("AB_TESTING_SPLIT", "0.1"))  # Default 10% test traffic
         
+        # Use version numbers instead of labels
         self.tests = {
             "aethon-personality": ABTestConfig(
                 enabled=ab_testing_enabled,
-                variants=["prod-a", "prod-b"],
+                variants=[1, 2],  # Version 1 vs Version 2
                 weights=[1.0 - ab_testing_split, ab_testing_split],  # e.g., 90/10 split
-                description=f"Aethon personality A/B test ({'enabled' if ab_testing_enabled else 'disabled'} via env)"
+                description=f"Aethon personality A/B test using version numbers ({'enabled' if ab_testing_enabled else 'disabled'} via env)"
             )
         }
     
-    def get_prompt_variant(self, prompt_name: str, test_name: str) -> tuple[Any, str]:
+    def get_prompt_variant(self, prompt_name: str, test_name: str) -> tuple[Any, Union[int, str]]:
         """
-        Get a prompt variant for A/B testing using Langfuse native approach.
+        Get a prompt variant for A/B testing using version numbers.
         
         Args:
             prompt_name: Name of the prompt in Langfuse
             test_name: Name of the A/B test configuration
             
         Returns:
-            Tuple of (prompt_object_or_content, selected_label)
+            Tuple of (prompt_object_or_content, selected_version)
         """
-        # Get the selected variant label
-        selected_label = self._select_variant(test_name)
+        # Get the selected variant (version number)
+        selected_variant = self._select_variant(test_name)
         
         try:
-            # Fetch prompt with the selected label
-            if selected_label == "production":
-                prompt = self.langfuse.get_prompt(prompt_name, label="production")
+            # Fetch prompt by version number
+            if selected_variant == "latest":
+                prompt = self.langfuse.get_prompt(prompt_name)
+                logger.info(f"Using latest prompt version {prompt.version}")
+                return prompt, prompt.version
             else:
-                prompt = self.langfuse.get_prompt(prompt_name, label=selected_label)
-            
-            logger.info(f"A/B Test '{test_name}': Using variant '{selected_label}' (version {prompt.version})")
-            return prompt, selected_label
-            
+                prompt = self.langfuse.get_prompt(prompt_name, version=selected_variant)
+                logger.info(f"A/B Test '{test_name}': Using version {selected_variant}")
+                return prompt, selected_variant
+                
         except Exception as e:
-            logger.warning(f"Failed to fetch prompt '{prompt_name}' with label '{selected_label}': {e}")
+            logger.warning(f"Failed to fetch prompt '{prompt_name}' version {selected_variant}: {e}")
             try:
-                # Try fallback to production
-                prompt = self.langfuse.get_prompt(prompt_name, label="production")
-                logger.info(f"Fallback: Using production prompt (version {prompt.version})")
-                return prompt, "production"
+                # Try fallback to latest version
+                prompt = self.langfuse.get_prompt(prompt_name)
+                logger.info(f"Fallback: Using latest prompt (version {prompt.version})")
+                return prompt, prompt.version
             except Exception as fallback_error:
                 # Ultimate fallback: use local AETHON_SYSTEM_PROMPT
                 logger.warning(f"Langfuse fallback failed: {fallback_error}")
@@ -121,29 +123,29 @@ class ABTestManager:
                 
                 return LocalPrompt(AETHON_SYSTEM_PROMPT), "local-fallback"
     
-    def _select_variant(self, test_name: str) -> str:
+    def _select_variant(self, test_name: str) -> Union[int, str]:
         """
-        Select a variant using weighted random selection (Langfuse native approach).
+        Select a variant using weighted random selection.
         
         Args:
             test_name: Name of the A/B test
             
         Returns:
-            Selected variant label (defaults to "production" when A/B testing is disabled)
+            Selected variant (version number or "latest")
         """
         if test_name not in self.tests:
-            logger.info(f"A/B test '{test_name}' not found, using single production prompt")
-            return "production"
+            logger.info(f"A/B test '{test_name}' not found, using latest version")
+            return "latest"
         
         test_config = self.tests[test_name]
         
         if not test_config.enabled:
-            logger.info(f"A/B test '{test_name}' is disabled, using single production prompt")
-            return "production"
+            logger.info(f"A/B test '{test_name}' is disabled, using latest version")
+            return "latest"
         
-        # Weighted random selection (Langfuse recommended approach)
+        # Weighted random selection
         selected = random.choices(test_config.variants, weights=test_config.weights)[0]
-        logger.debug(f"A/B test '{test_name}': Selected variant '{selected}'")
+        logger.debug(f"A/B test '{test_name}': Selected version {selected}")
         return selected
     
     def get_test_status(self, test_name: Optional[str] = None) -> Dict[str, Any]:
@@ -171,9 +173,9 @@ class ABTestManager:
         
         # Return all tests
         return {
-            "approach": "Langfuse native A/B testing",
-            "method": "Weighted random selection between labeled prompt variants",
-            "analytics": "Automatic metrics comparison in Langfuse dashboard",
+            "approach": "Langfuse version-based A/B testing",
+            "method": "Weighted random selection between prompt versions",
+            "analytics": "Automatic metrics comparison in Langfuse dashboard by version",
             "tests": {
                 name: {
                     "enabled": config.enabled,
@@ -211,9 +213,53 @@ class ABTestManager:
             "success": True,
             "test_name": test_name,
             "enabled": enabled,
-            "message": f"Langfuse A/B test '{test_name}' {'enabled' if enabled else 'disabled'}",
-            "note": "Analytics automatically available in Langfuse dashboard"
+            "message": f"Version-based A/B test '{test_name}' {'enabled' if enabled else 'disabled'}",
+            "note": "Analytics automatically available in Langfuse dashboard grouped by version"
         }
+    
+    def update_test_versions(self, test_name: str, versions: List[int], weights: Optional[List[float]] = None) -> Dict[str, Any]:
+        """
+        Update the versions being tested in an A/B test.
+        
+        Args:
+            test_name: Name of the test to update
+            versions: List of version numbers to test
+            weights: Optional weights for each version (defaults to equal distribution)
+            
+        Returns:
+            Dictionary with operation result
+        """
+        if test_name not in self.tests:
+            return {
+                "success": False,
+                "error": f"Test '{test_name}' not found",
+                "available_tests": list(self.tests.keys())
+            }
+        
+        # Default to equal weights if not provided
+        if weights is None:
+            weights = [1.0 / len(versions)] * len(versions)
+        
+        try:
+            # Update the test configuration
+            self.tests[test_name].variants = versions
+            self.tests[test_name].weights = weights
+            
+            logger.info(f"Updated A/B test '{test_name}' with versions: {versions}")
+            
+            return {
+                "success": True,
+                "test_name": test_name,
+                "message": f"Updated test to compare versions: {versions}",
+                "weights": weights
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to update A/B test '{test_name}': {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     def add_test(self, test_name: str, config: ABTestConfig) -> Dict[str, Any]:
         """
@@ -236,7 +282,7 @@ class ABTestManager:
             
             self.tests[test_name] = config
             
-            logger.info(f"Added A/B test '{test_name}' with variants: {config.variants}")
+            logger.info(f"Added A/B test '{test_name}' with versions: {config.variants}")
             
             return {
                 "success": True,
@@ -257,13 +303,13 @@ class ABTestManager:
                 "error": str(e)
             }
     
-    def get_metadata_for_trace(self, test_name: str, selected_label: str, user_id: str, conversation_id: str) -> Dict[str, Any]:
+    def get_metadata_for_trace(self, test_name: str, selected_version: Union[int, str], user_id: str, conversation_id: str) -> Dict[str, Any]:
         """
         Get metadata to attach to Langfuse traces for analytics.
         
         Args:
             test_name: Name of the A/B test
-            selected_label: The selected prompt variant label
+            selected_version: The selected prompt version
             user_id: User identifier
             conversation_id: Conversation identifier
             
@@ -272,7 +318,7 @@ class ABTestManager:
         """
         return {
             "ab_test_name": test_name,
-            "ab_test_variant": selected_label,
+            "ab_test_version": selected_version,
             "user_id": user_id,
             "conversation_id": conversation_id,
             "ab_test_enabled": self.tests.get(test_name, ABTestConfig(False, [], [])).enabled
