@@ -5,3 +5,4 @@ pydantic==2.11.4
 python-multipart==0.0.18
 langfuse
 python-dotenv==1.0.0
+mangum==0.17.0
