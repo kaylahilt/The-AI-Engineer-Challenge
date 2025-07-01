@@ -3,6 +3,8 @@
 import { useState, FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -75,7 +77,10 @@ export default function Home() {
           <div className={styles.response}>
             <h2>Response</h2>
             <div className={styles.markdown}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+              >
                 {response}
               </ReactMarkdown>
             </div>

@@ -63,10 +63,10 @@ class ABTestManager:
         # Use version numbers instead of labels
         self.tests = {
             "aethon-personality": ABTestConfig(
-                enabled=ab_testing_enabled,
-                variants=[1, 2],  # Version 1 vs Version 2
+                enabled=False,  # A/B testing disabled
+                variants=[3, 4],  # Version 3 (standard adaptive) vs Version 4 (concise)
                 weights=[1.0 - ab_testing_split, ab_testing_split],  # e.g., 90/10 split
-                description=f"Aethon personality A/B test using version numbers ({'enabled' if ab_testing_enabled else 'disabled'} via env)"
+                description=f"Aethon personality A/B test - currently disabled"
             )
         }
     
