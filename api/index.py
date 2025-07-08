@@ -297,6 +297,43 @@ When answering questions about the PDF:
             
             return
             
+        elif self.path == '/api/extract-entities':
+            try:
+                if not pdf_handler:
+                    raise RuntimeError("PDF functionality is not available in this environment")
+                
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                body = json.loads(post_data.decode('utf-8'))
+                pdf_id = body.get('pdf_id')
+                
+                if not pdf_id or not pdf_handler.current_pdf_id:
+                    raise ValueError("No PDF loaded")
+                
+                # Get the full text from the PDF handler
+                pdf_path = pdf_handler.upload_dir / f"{pdf_id}.pdf"
+                text_content = pdf_handler.extract_text_from_pdf(pdf_path)
+                named_entities = pdf_handler.extract_named_entities(text_content, top_k=5)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                self.wfile.write(json.dumps({
+                    "success": True,
+                    "named_entities": named_entities
+                }).encode())
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+            
+            return
+            
         elif self.path == '/api/clear-pdf':
             try:
                 if not pdf_handler:

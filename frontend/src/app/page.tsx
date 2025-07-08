@@ -20,7 +20,7 @@ export default function Home() {
   } | null>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [usePdf, setUsePdf] = useState(true);
-  const [extractEntities, setExtractEntities] = useState(false);
+  const [isExtractingEntities, setIsExtractingEntities] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -70,7 +70,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('pdf', file);
-      formData.append('extract_entities', extractEntities.toString());
+      formData.append('extract_entities', 'false');
 
       const response = await fetch('/api/upload-pdf', {
         method: 'POST',
@@ -93,6 +93,39 @@ export default function Home() {
       setError(`Failed to upload PDF: ${err.message}`);
     } finally {
       setIsUploadingPdf(false);
+    }
+  };
+
+  const handleExtractEntities = async () => {
+    if (!pdfInfo) return;
+
+    setIsExtractingEntities(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/extract-entities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          pdf_id: pdfInfo.pdf_id
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Entity extraction failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setPdfInfo(prev => prev ? {
+        ...prev,
+        named_entities: data.named_entities
+      } : null);
+    } catch (err: any) {
+      setError(`Failed to extract entities: ${err.message}`);
+    } finally {
+      setIsExtractingEntities(false);
     }
   };
 
@@ -127,14 +160,6 @@ export default function Home() {
           <h3>PDF Knowledge Base</h3>
           {!pdfInfo ? (
             <div className={styles.uploadArea}>
-              <label className={styles.checkbox}>
-                <input
-                  type="checkbox"
-                  checked={extractEntities}
-                  onChange={(e) => setExtractEntities(e.target.checked)}
-                />
-                Extract named entities from document
-              </label>
               <input
                 type="file"
                 accept=".pdf"
@@ -184,6 +209,15 @@ export default function Home() {
                   />
                   Use PDF context
                 </label>
+                {!pdfInfo.named_entities && (
+                  <button
+                    onClick={handleExtractEntities}
+                    className={styles.extractButton}
+                    disabled={isExtractingEntities}
+                  >
+                    {isExtractingEntities ? "Extracting..." : "Extract Entities"}
+                  </button>
+                )}
                 <button
                   onClick={handleClearPdf}
                   className={styles.clearButton}

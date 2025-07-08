@@ -477,6 +477,26 @@ a.secondary {
   color: white;
 }
 
+.extractButton {
+  padding: 0.5rem 1rem;
+  background-color: var(--primary);
+  color: var(--primary-text);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.extractButton:hover {
+  background-color: var(--primary-hover);
+}
+
+.extractButton:disabled {
+  background-color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
 /* Named Entities Styles */
 .namedEntities {
   margin: 1rem 0;
