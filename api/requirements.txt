@@ -1,6 +1,6 @@
 openai==1.77.0
 langfuse
 python-dotenv==1.0.0
-pypdf2
+PyPDF2
 numpy
 faiss-cpu

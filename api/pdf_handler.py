@@ -10,13 +10,12 @@ import hashlib
 import json
 
 # PDF processing
-from pypdf2 import PdfReader
+from PyPDF2 import PdfReader
 
 # Aimakerspace imports
 from aimakerspace.text_utils import TextFileLoader, CharacterTextSplitter
 from aimakerspace.vectordatabase import VectorDatabase
-from aimakerspace.embeddings import EmbeddingModel
-from aimakerspace.openai_utils import OpenAIEmbeddingModel
+from aimakerspace.openai_utils.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +29,8 @@ class PDFHandler:
         self.index_dir.mkdir(exist_ok=True)
         
         # Initialize embedding model
-        self.embedding_model = OpenAIEmbeddingModel(
-            model="text-embedding-ada-002",
-            api_key=os.getenv("OPENAI_API_KEY")
+        self.embedding_model = EmbeddingModel(
+            embeddings_model_name="text-embedding-ada-002"
         )
         
         # Current loaded PDF info
