@@ -209,7 +209,11 @@ export default function Home() {
                     {pdfInfo.named_entities.map((entity, index) => (
                       <li key={index}>
                         <span className={styles.entityText}>{entity.text}</span>
-                        <span className={styles.entityLabel}>{entity.label}</span>
+                        <span className={styles.entityLabel} title={
+                          entity.label === 'PERSON' ? 'Person' :
+                          entity.label === 'ORG' ? 'Organization' :
+                          'Entity'
+                        }>{entity.label}</span>
                         <span className={styles.entityCount}>({entity.count})</span>
                       </li>
                     ))}

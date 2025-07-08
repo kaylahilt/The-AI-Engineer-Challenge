@@ -240,13 +240,16 @@ class PDFHandler:
         
         # Improved patterns for common entities (ordered by specificity)
         patterns = [
-            # Most specific patterns first
-            ("PERSON_TITLE", r'\b(?:Mr|Mrs|Ms|Dr|Prof|President|CEO|CFO|CTO|Director|Manager|VP|Executive|Chief|Head)\.?\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b'),
-            ("PERSON_MI", r'\b[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\b'),
-            ("ORG", r'\b[A-Z][a-zA-Z\s&,]+(?:\s+(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company|Co|Group|Therapeutics|Pharmaceuticals|Foundation|Institute|Agency|Department|Division|Bureau|Office|Association|Society|Organization|University|College|School|Hospital|Bank|Fund|Trust|Capital|Markets|Chase|Piper|Sandler|Baird)\.?)\b'),
-            ("ORG_ACRONYM", r'\b(?:FDA|EPA|FBI|CIA|NASA|WHO|UN|EU|NATO|NASDAQ|NYSE|SEC|JPM|RBC)\b'),
-            ("PERSON_FULL", r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b'),
-            ("ENTITY", r'\b[A-Z][a-z]{2,}\b')
+            # Exclude patterns first (these should NOT be extracted)
+            ("EXCLUDE", r'\b(?:Research Division|Marketing Division|Sales Division|Engineering Division|Content|LLC|Inc|Corp|Ltd|Scientific Officer|Head of Research)\b'),
+            # Most specific patterns
+            ("PERSON_TITLE", r'\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b'),
+            ("PERSON_MI", r'\b[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z-]+\b'),
+            # Investment firms and financial companies (more specific)
+            ("ORG_FINANCE", r'\b(?:JPMorgan Chase & Co|Piper Sandler & Co|Robert W\. Baird & Co|RBC Capital Markets|Sarepta Therapeutics)(?:\s*[,.]?\s*(?:Inc|Research Division))?\b'),
+            ("ORG", r'\b[A-Z][a-zA-Z\s&,]+(?:\s+(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company|Co|Group|Therapeutics|Pharmaceuticals|Foundation|Institute|Agency|Association|Society|Organization|University|College|School|Hospital|Bank|Fund|Trust)\.?)\b'),
+            ("ORG_ACRONYM", r'\b(?:FDA|EPA|FBI|CIA|NASA|WHO|UN|EU|NATO|NASDAQ|NYSE|SEC)\b'),
+            ("PERSON_FULL", r'\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z-]+\b')
         ]
         
         entity_counter = Counter()
@@ -271,24 +274,73 @@ class PDFHandler:
             overlap = any(match_start < end and match_end > start for start, end in used_positions)
             
             if not overlap:
+                # Skip if this is an EXCLUDE pattern
+                if label == "EXCLUDE":
+                    continue
+                    
                 # Skip common words that match patterns
                 skip_words = {'the', 'this', 'that', 'these', 'those', 'content', 'page', 
                              'executive', 'research', 'division', 'analyst', 'analysts',
                              'page', 'edited', 'special', 'call', 'participants', 'version',
-                             'officer', 'head', 'content'}
+                             'officer', 'head', 'content', 'and', 'or', 'but', 'president',
+                             'director', 'manager', 'operator', 'our', 'your', 'their',
+                             'chief', 'vice', 'senior', 'assistant', 'associate', 'llc',
+                             'inc', 'corp', 'ltd', 'executives', 'summary', 'overview'}
                 if entity_text.lower() in skip_words:
+                    continue
+                    
+                # Skip standalone company suffixes
+                if entity_text.upper() in ['LLC', 'INC', 'CORP', 'LTD', 'CO']:
+                    continue
+                    
+                # Skip titles that include "Officer", "Head of", etc.
+                title_patterns = ['officer', 'head of', 'director of', 'president of', 'chief of']
+                if any(pattern in entity_text.lower() for pattern in title_patterns):
                     continue
                     
                 # Skip single letters or very short words
                 if len(entity_text) <= 2:
                     continue
                 
+                # Additional filtering for false positives
+                # Skip if it's just a single common word (even if capitalized)
+                single_word_skip = {'and', 'or', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 
+                                   'from', 'up', 'about', 'into', 'through', 'after', 'over',
+                                   'between', 'out', 'against', 'during', 'without', 'before',
+                                   'under', 'around', 'among'}
+                if entity_text.lower() in single_word_skip:
+                    continue
+                
+                # Skip if it contains common non-entity words or is a generic term
+                non_entity_phrases = ['operator our', 'and the', 'or the', 'in the', 'on the', 
+                                     'at the', 'to the', 'for the', 'of the', 'with the',
+                                     'research division', 'content', 'scientific officer',
+                                     'head of research', 'research & develop']
+                if any(phrase in entity_text.lower() for phrase in non_entity_phrases):
+                    continue
+                    
+                # Skip generic organizational terms without company names
+                generic_org_terms = ['research division', 'marketing division', 'sales division',
+                                    'engineering division', 'content division', 'it division']
+                if entity_text.lower() in generic_org_terms:
+                    continue
+                
                 # Normalize label
                 if "PERSON" in label:
+                    # Additional check for person names
+                    # Skip if it's just a title without a proper name
+                    if entity_text.lower() in ['president', 'director', 'manager', 'executive', 'chief']:
+                        continue
+                    # For single-word names, we'll check frequency later
                     final_label = "PERSON"
-                elif label in ["ORG", "ORG_ACRONYM"] or any(org_word in entity_text for org_word in ['Inc', 'Corp', 'LLC', 'Company', 'Therapeutics', 'Pharmaceuticals', 'Bank', 'Capital']):
+                elif label in ["ORG", "ORG_ACRONYM", "ORG_FINANCE"] or any(org_word in entity_text for org_word in ['Inc', 'Corp', 'LLC', 'Company', 'Therapeutics', 'Pharmaceuticals', 'Bank', 'Capital', 'Markets', 'Division']):
                     final_label = "ORG"
                 else:
+                    # For single-word entities, only keep known meaningful ones
+                    known_entities = ['fda', 'sec', 'nasdaq', 'nyse', 'epa', 'fbi', 'cia', 'nasa', 'who']
+                    if len(entity_text.split()) == 1:
+                        if entity_text.lower() not in known_entities:
+                            continue
                     final_label = "ENTITY"
                 
                 # Mark this position as used
@@ -298,12 +350,43 @@ class PDFHandler:
                 entity_counter[entity_text] += 1
                 entity_labels[entity_text] = final_label
         
+        # Post-process entities to filter out likely false positives
+        filtered_counter = Counter()
+        filtered_labels = {}
+        
+        for entity_text, count in entity_counter.items():
+            label = entity_labels[entity_text]
+            
+            # Filter single-word person names unless they appear frequently
+            if label == "PERSON" and len(entity_text.split()) == 1:
+                if count < 5:  # Skip single names with low frequency
+                    continue
+                    
+            # Filter organizations that are just generic divisions
+            if label == "ORG":
+                lower_text = entity_text.lower()
+                if any(term in lower_text for term in ['research division', 'marketing division', 
+                                                       'sales division', 'content', 'llc']):
+                    continue
+                # Skip if it's just "Division" or similar
+                if lower_text in ['division', 'department', 'office', 'bureau', 'llc', 'content']:
+                    continue
+                    
+            # Filter out truncated or malformed entities
+            if any(char in entity_text for char in ['ﬃ', 'ﬁ', 'ﬂ']):  # PDF encoding issues
+                continue
+            if entity_text.endswith(' &') or entity_text.endswith(' t'):  # Truncated text
+                continue
+                
+            filtered_counter[entity_text] = count
+            filtered_labels[entity_text] = label
+        
         # Get top K entities
         top_entities = []
-        for entity_text, count in entity_counter.most_common(top_k):
+        for entity_text, count in filtered_counter.most_common(top_k):
             top_entities.append({
                 "text": entity_text,
-                "label": entity_labels.get(entity_text, "ENTITY"),
+                "label": filtered_labels[entity_text],
                 "count": count
             })
         
