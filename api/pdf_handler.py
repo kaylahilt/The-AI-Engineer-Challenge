@@ -16,9 +16,18 @@ from pathlib import Path
 import hashlib
 import json
 import numpy as np
+from collections import Counter
 
 # PDF processing
 from PyPDF2 import PdfReader
+
+# Named entity recognition
+try:
+    import spacy
+    nlp = spacy.load("en_core_web_sm")
+except:
+    nlp = None
+    logging.warning("spaCy model not loaded. Named entity extraction will be disabled.")
 
 # Aimakerspace imports
 from aimakerspace.text_utils import TextFileLoader, CharacterTextSplitter
@@ -186,6 +195,42 @@ class PDFHandler:
             
         return "\n\n".join(context_parts)
         
+    def extract_named_entities(self, text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Extract named entities from text using spaCy"""
+        if not nlp:
+            logger.warning("spaCy not available, skipping entity extraction")
+            return []
+            
+        try:
+            # Process text with spaCy
+            doc = nlp(text)
+            
+            # Extract entities and count occurrences
+            entity_counter = Counter()
+            entity_labels = {}
+            
+            for ent in doc.ents:
+                # Normalize entity text (strip whitespace, convert to title case)
+                entity_text = ent.text.strip()
+                if entity_text and ent.label_ not in ["DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL"]:
+                    entity_counter[entity_text] += 1
+                    entity_labels[entity_text] = ent.label_
+            
+            # Get top K entities
+            top_entities = []
+            for entity_text, count in entity_counter.most_common(top_k):
+                top_entities.append({
+                    "text": entity_text,
+                    "label": entity_labels[entity_text],
+                    "count": count
+                })
+            
+            return top_entities
+            
+        except Exception as e:
+            logger.error(f"Error extracting entities: {e}")
+            return []
+    
     def clear_current_pdf(self):
         """Clear the currently loaded PDF"""
         self.current_pdf_id = None

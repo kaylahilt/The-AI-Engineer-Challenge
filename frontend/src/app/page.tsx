@@ -16,9 +16,11 @@ export default function Home() {
     filename: string;
     pdf_id: string;
     num_chunks: number;
+    named_entities?: { text: string; label: string; count: number }[];
   } | null>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [usePdf, setUsePdf] = useState(true);
+  const [extractEntities, setExtractEntities] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -68,6 +70,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('pdf', file);
+      formData.append('extract_entities', extractEntities.toString());
 
       const response = await fetch('/api/upload-pdf', {
         method: 'POST',
@@ -82,7 +85,8 @@ export default function Home() {
       setPdfInfo({
         filename: data.filename,
         pdf_id: data.pdf_id,
-        num_chunks: data.num_chunks
+        num_chunks: data.num_chunks,
+        named_entities: data.named_entities
       });
       setUsePdf(true);
     } catch (err: any) {
@@ -123,6 +127,14 @@ export default function Home() {
           <h3>PDF Knowledge Base</h3>
           {!pdfInfo ? (
             <div className={styles.uploadArea}>
+              <label className={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={extractEntities}
+                  onChange={(e) => setExtractEntities(e.target.checked)}
+                />
+                Extract named entities from document
+              </label>
               <input
                 type="file"
                 accept=".pdf"
@@ -149,6 +161,20 @@ export default function Home() {
                   {pdfInfo.num_chunks} text chunks indexed
                 </span>
               </div>
+              {pdfInfo.named_entities && pdfInfo.named_entities.length > 0 && (
+                <div className={styles.namedEntities}>
+                  <h4>Top Named Entities:</h4>
+                  <ul className={styles.entityList}>
+                    {pdfInfo.named_entities.map((entity, index) => (
+                      <li key={index}>
+                        <span className={styles.entityText}>{entity.text}</span>
+                        <span className={styles.entityLabel}>{entity.label}</span>
+                        <span className={styles.entityCount}>({entity.count})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className={styles.pdfControls}>
                 <label className={styles.checkbox}>
                   <input

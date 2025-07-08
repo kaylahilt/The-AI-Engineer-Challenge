@@ -476,3 +476,55 @@ a.secondary {
   background-color: var(--accent-error);
   color: white;
 }
+
+/* Named Entities Styles */
+.namedEntities {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: var(--background);
+  border-radius: 6px;
+}
+
+.namedEntities h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.entityList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entityList li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.entityList li:last-child {
+  border-bottom: none;
+}
+
+.entityText {
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.entityLabel {
+  padding: 0.25rem 0.5rem;
+  background-color: var(--primary);
+  color: var(--primary-text);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.entityCount {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}

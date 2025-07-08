@@ -224,21 +224,29 @@ When answering questions about the PDF:
                 
                 pdf_content = None
                 filename = "uploaded.pdf"
+                extract_entities = False
                 
                 for part in parts:
-                    if b'Content-Disposition' in part and b'filename=' in part:
-                        # Extract filename
-                        header_lines = part.split(b'\r\n')
-                        for line in header_lines:
-                            if b'filename=' in line:
-                                filename = line.split(b'filename=')[1].split(b'"')[1].decode('utf-8')
+                    if b'Content-Disposition' in part:
+                        if b'name="extract_entities"' in part:
+                            # Extract the value for extract_entities
+                            content_start = part.find(b'\r\n\r\n')
+                            if content_start != -1:
+                                value = part[content_start + 4:].rstrip(b'\r\n').decode('utf-8')
+                                extract_entities = value.lower() == 'true'
+                        elif b'filename=' in part:
+                            # Extract filename
+                            header_lines = part.split(b'\r\n')
+                            for line in header_lines:
+                                if b'filename=' in line:
+                                    filename = line.split(b'filename=')[1].split(b'"')[1].decode('utf-8')
+                                    break
+                            
+                            # Extract content (after double CRLF)
+                            content_start = part.find(b'\r\n\r\n')
+                            if content_start != -1:
+                                pdf_content = part[content_start + 4:].rstrip(b'\r\n')
                                 break
-                        
-                        # Extract content (after double CRLF)
-                        content_start = part.find(b'\r\n\r\n')
-                        if content_start != -1:
-                            pdf_content = part[content_start + 4:].rstrip(b'\r\n')
-                            break
                 
                 if not pdf_content:
                     raise ValueError("No PDF content found in upload")
@@ -246,6 +254,19 @@ When answering questions about the PDF:
                 # Save and index the PDF
                 pdf_id = pdf_handler.save_pdf(filename, pdf_content)
                 index_result = pdf_handler.index_pdf(pdf_id)
+                
+                # Extract named entities if requested
+                named_entities = []
+                if extract_entities:
+                    try:
+                        # Get the full text from the PDF handler
+                        pdf_path = pdf_handler.upload_dir / f"{pdf_id}.pdf"
+                        text_content = pdf_handler.extract_text_from_pdf(pdf_path)
+                        named_entities = pdf_handler.extract_named_entities(text_content, top_k=5)
+                        logger.info(f"Extracted {len(named_entities)} named entities")
+                    except Exception as e:
+                        logger.error(f"Failed to extract entities: {e}")
+                        # Continue without entities rather than failing the whole upload
                 
                 # Send success response
                 self.send_response(200)
@@ -260,6 +281,10 @@ When answering questions about the PDF:
                     "num_chunks": index_result["num_chunks"],
                     "status": "ready"
                 }
+                
+                # Add entities only if extraction was requested and successful
+                if extract_entities and named_entities:
+                    result["named_entities"] = named_entities
                 
                 self.wfile.write(json.dumps(result).encode())
                 
