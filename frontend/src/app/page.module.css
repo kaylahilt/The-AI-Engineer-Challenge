@@ -411,6 +411,17 @@ a.secondary {
   font-size: 0.875rem;
 }
 
+.uploadWarning {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(235, 87, 87, 0.1);
+  border: 1px solid rgba(235, 87, 87, 0.3);
+  border-radius: 6px;
+  color: var(--accent-error);
+  font-size: 0.813rem;
+  line-height: 1.5;
+}
+
 .pdfInfo {
   display: flex;
   flex-direction: column;

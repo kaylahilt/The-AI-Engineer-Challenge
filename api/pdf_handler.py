@@ -1,5 +1,12 @@
 """
 PDF Handler for RAG functionality using aimakerspace library
+
+Note: In Vercel's serverless environment, we use /tmp directory which is:
+- The only writable directory
+- Ephemeral (cleared between invocations)
+- Limited to 512MB
+
+For production, consider using cloud storage (S3, etc.) for persistence.
 """
 
 import os
@@ -22,7 +29,7 @@ logger = logging.getLogger(__name__)
 class PDFHandler:
     """Handles PDF upload, indexing, and RAG operations"""
     
-    def __init__(self, upload_dir: str = "uploads", index_dir: str = "indexes"):
+    def __init__(self, upload_dir: str = "/tmp/uploads", index_dir: str = "/tmp/indexes"):
         self.upload_dir = Path(upload_dir)
         self.index_dir = Path(index_dir)
         self.upload_dir.mkdir(exist_ok=True)

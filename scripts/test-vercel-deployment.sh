@@ -79,6 +79,30 @@ else
     echo -e "${GREEN}✅ vercel.json exists${NC}"
 fi
 
+# Test 6: Check for local-only modules
+echo -e "\n${YELLOW}6. Checking for local Python modules...${NC}"
+if [ -d "api/aimakerspace" ] || [ -d "aimakerspace" ]; then
+    echo -e "${YELLOW}⚠️  Found local aimakerspace module - ensure it's not in requirements.txt${NC}"
+    grep -q "aimakerspace" api/requirements.txt 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${RED}❌ ERROR: aimakerspace is in requirements.txt but exists as local module!${NC}"
+        FAILED=1
+    else
+        echo -e "${GREEN}✅ Local module not in requirements.txt${NC}"
+    fi
+fi
+
+# Test 7: Vercel-specific Python checks
+echo -e "\n${YELLOW}7. Testing Vercel Python compatibility...${NC}"
+cd api
+python3 -c "
+import sys
+print(f'✅ Python version: {sys.version.split()[0]}')
+if sys.version_info[:2] < (3, 9):
+    print('⚠️  Warning: Vercel uses Python 3.9+')
+"
+cd ..
+
 # Summary
 echo -e "\n======================================="
 if [ $FAILED -eq 0 ]; then

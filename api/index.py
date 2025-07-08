@@ -16,7 +16,17 @@ sys.path.insert(0, str(current_dir))
 
 # Initialize PDF handler globally
 from pdf_handler import PDFHandler
-pdf_handler = PDFHandler()
+import logging
+
+logger = logging.getLogger(__name__)
+
+try:
+    pdf_handler = PDFHandler()
+    logger.info("PDFHandler initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize PDFHandler: {e}")
+    logger.warning("PDF functionality will be disabled")
+    pdf_handler = None
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -54,7 +64,7 @@ class handler(BaseHTTPRequestHandler):
                 "status": "healthy",
                 "service": "aethon-api",
                 "features": features,
-                "current_pdf": pdf_handler.current_pdf_id
+                "current_pdf": pdf_handler.current_pdf_id if pdf_handler else None
             }
             
             self.wfile.write(json.dumps(response).encode())
@@ -89,7 +99,7 @@ class handler(BaseHTTPRequestHandler):
                 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
                 
                 # Check if we should use RAG with PDF
-                if use_pdf and pdf_handler.current_pdf_id:
+                if use_pdf and pdf_handler and pdf_handler.current_pdf_id:
                     # Get context from PDF
                     try:
                         pdf_context = pdf_handler.generate_rag_context(message)
@@ -177,7 +187,7 @@ When answering questions about the PDF:
                     "conversation_id": f"conv_{abs(hash(user_id + message))}",
                     "prompt_version": prompt_version,
                     "mode": mode,
-                    "pdf_active": pdf_handler.current_pdf_id is not None
+                    "pdf_active": pdf_handler.current_pdf_id is not None if pdf_handler else False
                 }
                 
                 self.wfile.write(json.dumps(result).encode())
@@ -193,6 +203,10 @@ When answering questions about the PDF:
             
         elif self.path == '/api/upload-pdf':
             try:
+                # Check if PDF handler is available
+                if not pdf_handler:
+                    raise RuntimeError("PDF functionality is not available in this environment")
+                
                 # Parse multipart form data
                 content_type = self.headers['Content-Type']
                 if 'multipart/form-data' not in content_type:
@@ -260,6 +274,9 @@ When answering questions about the PDF:
             
         elif self.path == '/api/clear-pdf':
             try:
+                if not pdf_handler:
+                    raise RuntimeError("PDF functionality is not available in this environment")
+                
                 pdf_handler.clear_current_pdf()
                 
                 self.send_response(200)

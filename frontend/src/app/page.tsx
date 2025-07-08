@@ -137,6 +137,9 @@ export default function Home() {
               <p className={styles.uploadHint}>
                 Upload a PDF to enable document-based Q&A
               </p>
+              <p className={styles.uploadWarning}>
+                ⚠️ Note: On Vercel, PDFs are stored temporarily and may be cleared between sessions
+              </p>
             </div>
           ) : (
             <div className={styles.pdfInfo}>
