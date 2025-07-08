@@ -444,9 +444,15 @@ a.secondary {
 
 .pdfControls {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.checkboxGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .checkbox {
@@ -459,6 +465,11 @@ a.secondary {
 
 .checkbox input {
   cursor: pointer;
+}
+
+.checkbox input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .clearButton {
@@ -475,26 +486,6 @@ a.secondary {
 .clearButton:hover {
   background-color: var(--accent-error);
   color: white;
-}
-
-.extractButton {
-  padding: 0.5rem 1rem;
-  background-color: var(--primary);
-  color: var(--primary-text);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: all 0.2s;
-}
-
-.extractButton:hover {
-  background-color: var(--primary-hover);
-}
-
-.extractButton:disabled {
-  background-color: var(--text-secondary);
-  cursor: not-allowed;
 }
 
 /* Named Entities Styles */

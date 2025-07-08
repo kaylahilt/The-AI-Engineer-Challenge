@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent } from "react";
+import { useState, FormEvent, ChangeEvent, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -20,7 +20,22 @@ export default function Home() {
   } | null>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [usePdf, setUsePdf] = useState(true);
+  const [extractEntities, setExtractEntities] = useState(false);
   const [isExtractingEntities, setIsExtractingEntities] = useState(false);
+
+  // Handle entity extraction when checkbox changes
+  useEffect(() => {
+    if (pdfInfo && extractEntities && !pdfInfo.named_entities) {
+      handleExtractEntities();
+    } else if (pdfInfo && !extractEntities && pdfInfo.named_entities) {
+      // Clear entities when unchecked
+      setPdfInfo(prev => prev ? {
+        ...prev,
+        named_entities: undefined
+      } : null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extractEntities, pdfInfo?.pdf_id]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -141,6 +156,7 @@ export default function Home() {
 
       setPdfInfo(null);
       setUsePdf(false);
+      setExtractEntities(false);
       setError("");
     } catch (err: any) {
       setError(`Failed to clear PDF: ${err.message}`);
@@ -201,23 +217,25 @@ export default function Home() {
                 </div>
               )}
               <div className={styles.pdfControls}>
-                <label className={styles.checkbox}>
-                  <input
-                    type="checkbox"
-                    checked={usePdf}
-                    onChange={(e) => setUsePdf(e.target.checked)}
-                  />
-                  Use PDF context
-                </label>
-                {!pdfInfo.named_entities && (
-                  <button
-                    onClick={handleExtractEntities}
-                    className={styles.extractButton}
-                    disabled={isExtractingEntities}
-                  >
-                    {isExtractingEntities ? "Extracting..." : "Extract Entities"}
-                  </button>
-                )}
+                <div className={styles.checkboxGroup}>
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={usePdf}
+                      onChange={(e) => setUsePdf(e.target.checked)}
+                    />
+                    Use PDF context
+                  </label>
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={extractEntities}
+                      onChange={(e) => setExtractEntities(e.target.checked)}
+                      disabled={isExtractingEntities}
+                    />
+                    {isExtractingEntities ? "Extracting entities..." : "Extract named entities"}
+                  </label>
+                </div>
                 <button
                   onClick={handleClearPdf}
                   className={styles.clearButton}
