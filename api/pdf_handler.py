@@ -22,12 +22,15 @@ from collections import Counter
 from PyPDF2 import PdfReader
 
 # Named entity recognition
+# Disabled for Vercel deployment due to size limits
+# To enable locally, uncomment and install: pip install spacy && python -m spacy download en_core_web_sm
+nlp = None
 try:
     import spacy
     nlp = spacy.load("en_core_web_sm")
 except:
     nlp = None
-    logging.warning("spaCy model not loaded. Named entity extraction will be disabled.")
+    logging.info("spaCy not available. Named entity extraction is disabled in production.")
 
 # Aimakerspace imports
 from aimakerspace.text_utils import TextFileLoader, CharacterTextSplitter
@@ -198,8 +201,8 @@ class PDFHandler:
     def extract_named_entities(self, text: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """Extract named entities from text using spaCy"""
         if not nlp:
-            logger.warning("spaCy not available, skipping entity extraction")
-            return []
+            logger.warning("spaCy not available, using simple extraction")
+            return self.extract_named_entities_simple(text, top_k)
             
         try:
             # Process text with spaCy
@@ -230,6 +233,63 @@ class PDFHandler:
         except Exception as e:
             logger.error(f"Error extracting entities: {e}")
             return []
+    
+    def extract_named_entities_simple(self, text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Simple regex-based entity extraction for when spaCy is not available"""
+        import re
+        
+        # Simple patterns for common entities
+        patterns = {
+            # Capitalized words (likely proper nouns)
+            "ENTITY": r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',
+            # Organizations ending with Inc., Corp., LLC, etc.
+            "ORG": r'\b[A-Z][a-zA-Z\s&]+(?:\s+(?:Inc|Corp|Corporation|LLC|Ltd|Company|Co|Group|Foundation|Institute|Agency|Department|Division|Bureau|Office|Association|Society|Organization|University|College|School|Hospital|Bank|Fund|Trust)\.?)\b',
+            # Common titles followed by names
+            "PERSON": r'\b(?:Mr|Mrs|Ms|Dr|Prof|President|CEO|CFO|CTO|Director|Manager|VP|Executive|Chief|Head)\.?\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+\b',
+            # Standalone names (First Last or First Middle Last)
+            "PERSON2": r'\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+\b',
+            # Well-known acronyms
+            "ORG_ACRONYM": r'\b(?:FDA|EPA|FBI|CIA|NASA|WHO|UN|EU|NATO|NASDAQ|NYSE|SEC)\b'
+        }
+        
+        entity_counter = Counter()
+        entity_labels = {}
+        seen_entities = set()
+        
+        # Extract entities using patterns
+        for label, pattern in patterns.items():
+            matches = re.finditer(pattern, text)
+            for match in matches:
+                entity_text = match.group().strip()
+                # Skip common words that match patterns
+                if entity_text.lower() in {'the', 'this', 'that', 'these', 'those', 'content', 'page'}:
+                    continue
+                # Normalize label
+                if label.startswith("PERSON"):
+                    label = "PERSON"
+                elif label in ["ORG", "ORG_ACRONYM", "ENTITY"]:
+                    if any(org_word in entity_text for org_word in ['Inc', 'Corp', 'LLC', 'Department', 'Division', 'FDA', 'SEC']):
+                        label = "ORG"
+                    else:
+                        label = "ENTITY"
+                
+                # Avoid duplicates with different cases
+                entity_key = entity_text.lower()
+                if entity_key not in seen_entities:
+                    seen_entities.add(entity_key)
+                    entity_counter[entity_text] += 1
+                    entity_labels[entity_text] = label
+        
+        # Get top K entities
+        top_entities = []
+        for entity_text, count in entity_counter.most_common(top_k):
+            top_entities.append({
+                "text": entity_text,
+                "label": entity_labels.get(entity_text, "ENTITY"),
+                "count": count
+            })
+        
+        return top_entities
     
     def clear_current_pdf(self):
         """Clear the currently loaded PDF"""
