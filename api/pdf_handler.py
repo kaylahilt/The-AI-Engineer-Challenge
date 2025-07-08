@@ -15,6 +15,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 import hashlib
 import json
+import numpy as np
 
 # PDF processing
 from PyPDF2 import PdfReader
@@ -92,10 +93,9 @@ class PDFHandler:
         logger.info(f"Splitting text into chunks")
         text_splitter = CharacterTextSplitter(
             chunk_size=500,
-            chunk_overlap=50,
-            separator="\n"
+            chunk_overlap=50
         )
-        self.chunks = text_splitter.split_text(text_content)
+        self.chunks = text_splitter.split(text_content)
         
         # Create embeddings
         logger.info(f"Creating embeddings for {len(self.chunks)} chunks")
@@ -105,14 +105,10 @@ class PDFHandler:
             embeddings.append(embedding)
             
         # Create vector database
-        self.vector_db = VectorDatabase()
+        self.vector_db = VectorDatabase(embedding_model=self.embedding_model)
         for i, (chunk, embedding) in enumerate(zip(self.chunks, embeddings)):
-            self.vector_db.add_document(
-                document_id=str(i),
-                text=chunk,
-                embedding=embedding,
-                metadata={"chunk_index": i, "pdf_id": pdf_id}
-            )
+            # VectorDatabase uses text as key and embedding as value
+            self.vector_db.insert(chunk, np.array(embedding))
             
         # Save index
         index_path = self.index_dir / f"{pdf_id}_index.json"
@@ -130,8 +126,7 @@ class PDFHandler:
         """Save the index data"""
         index_data = {
             "pdf_id": pdf_id,
-            "chunks": self.chunks,
-            "vector_db": self.vector_db.to_dict() if hasattr(self.vector_db, 'to_dict') else {}
+            "chunks": self.chunks
         }
         
         with open(index_path, "w") as f:
@@ -150,15 +145,10 @@ class PDFHandler:
         self.current_pdf_id = pdf_id
         
         # Recreate vector database
-        self.vector_db = VectorDatabase()
-        for i, chunk in enumerate(self.chunks):
+        self.vector_db = VectorDatabase(embedding_model=self.embedding_model)
+        for chunk in self.chunks:
             embedding = self.embedding_model.get_embedding(chunk)
-            self.vector_db.add_document(
-                document_id=str(i),
-                text=chunk,
-                embedding=embedding,
-                metadata={"chunk_index": i, "pdf_id": pdf_id}
-            )
+            self.vector_db.insert(chunk, np.array(embedding))
             
         return True
         
@@ -171,18 +161,19 @@ class PDFHandler:
         query_embedding = self.embedding_model.get_embedding(query)
         
         # Search for similar chunks
+        # VectorDatabase.search returns List[Tuple[str, float]] where str is the text and float is the score
         results = self.vector_db.search(
-            query_embedding=query_embedding,
-            top_k=top_k
+            query_vector=np.array(query_embedding),
+            k=top_k
         )
         
         return [
             {
-                "text": result["text"],
-                "score": result["score"],
-                "metadata": result.get("metadata", {})
+                "text": text,
+                "score": score,
+                "metadata": {"pdf_id": self.current_pdf_id}
             }
-            for result in results
+            for text, score in results
         ]
         
     def generate_rag_context(self, query: str, top_k: int = 3) -> str:
