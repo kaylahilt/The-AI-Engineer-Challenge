@@ -1,3 +1,7 @@
 openai==1.77.0
 langfuse
 python-dotenv==1.0.0
+aimakerspace
+pypdf2
+numpy
+faiss-cpu

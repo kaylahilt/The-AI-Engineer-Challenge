@@ -364,3 +364,104 @@ a.secondary {
     filter: invert();
   }
 }
+
+/* PDF Upload Styles */
+.pdfSection {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.pdfSection h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.uploadArea {
+  text-align: center;
+  padding: 2rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.uploadButton {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary);
+  color: var(--primary-text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.uploadButton:hover {
+  background-color: var(--primary-hover);
+}
+
+.uploadHint {
+  margin-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pdfInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pdfDetails {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background-color: var(--background);
+  border-radius: 6px;
+}
+
+.chunks {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pdfControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.checkbox input {
+  cursor: pointer;
+}
+
+.clearButton {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  color: var(--accent-error);
+  border: 1px solid var(--accent-error);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background-color: var(--accent-error);
+  color: white;
+}
