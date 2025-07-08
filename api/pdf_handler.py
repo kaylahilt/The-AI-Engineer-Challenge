@@ -238,47 +238,65 @@ class PDFHandler:
         """Simple regex-based entity extraction for when spaCy is not available"""
         import re
         
-        # Simple patterns for common entities
-        patterns = {
-            # Capitalized words (likely proper nouns)
-            "ENTITY": r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',
-            # Organizations ending with Inc., Corp., LLC, etc.
-            "ORG": r'\b[A-Z][a-zA-Z\s&]+(?:\s+(?:Inc|Corp|Corporation|LLC|Ltd|Company|Co|Group|Foundation|Institute|Agency|Department|Division|Bureau|Office|Association|Society|Organization|University|College|School|Hospital|Bank|Fund|Trust)\.?)\b',
-            # Common titles followed by names
-            "PERSON": r'\b(?:Mr|Mrs|Ms|Dr|Prof|President|CEO|CFO|CTO|Director|Manager|VP|Executive|Chief|Head)\.?\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+\b',
-            # Standalone names (First Last or First Middle Last)
-            "PERSON2": r'\b[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+\b',
-            # Well-known acronyms
-            "ORG_ACRONYM": r'\b(?:FDA|EPA|FBI|CIA|NASA|WHO|UN|EU|NATO|NASDAQ|NYSE|SEC)\b'
-        }
+        # Improved patterns for common entities (ordered by specificity)
+        patterns = [
+            # Most specific patterns first
+            ("PERSON_TITLE", r'\b(?:Mr|Mrs|Ms|Dr|Prof|President|CEO|CFO|CTO|Director|Manager|VP|Executive|Chief|Head)\.?\s+[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:\s+[A-Z][a-z]+)+\b'),
+            ("PERSON_MI", r'\b[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\b'),
+            ("ORG", r'\b[A-Z][a-zA-Z\s&,]+(?:\s+(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company|Co|Group|Therapeutics|Pharmaceuticals|Foundation|Institute|Agency|Department|Division|Bureau|Office|Association|Society|Organization|University|College|School|Hospital|Bank|Fund|Trust|Capital|Markets|Chase|Piper|Sandler|Baird)\.?)\b'),
+            ("ORG_ACRONYM", r'\b(?:FDA|EPA|FBI|CIA|NASA|WHO|UN|EU|NATO|NASDAQ|NYSE|SEC|JPM|RBC)\b'),
+            ("PERSON_FULL", r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b'),
+            ("ENTITY", r'\b[A-Z][a-z]{2,}\b')
+        ]
         
         entity_counter = Counter()
         entity_labels = {}
-        seen_entities = set()
+        all_matches = []  # Collect all matches first
         
         # Extract entities using patterns
-        for label, pattern in patterns.items():
-            matches = re.finditer(pattern, text)
+        for label, pattern in patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE if label == "ORG_ACRONYM" else 0)
             for match in matches:
                 entity_text = match.group().strip()
+                match_start, match_end = match.span()
+                all_matches.append((match_start, match_end, entity_text, label))
+        
+        # Sort matches by start position and length (longer matches first)
+        all_matches.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+        
+        # Process matches, avoiding overlaps but counting all occurrences
+        used_positions = set()
+        for match_start, match_end, entity_text, label in all_matches:
+            # Check if this position overlaps with a previously processed match
+            overlap = any(match_start < end and match_end > start for start, end in used_positions)
+            
+            if not overlap:
                 # Skip common words that match patterns
-                if entity_text.lower() in {'the', 'this', 'that', 'these', 'those', 'content', 'page'}:
+                skip_words = {'the', 'this', 'that', 'these', 'those', 'content', 'page', 
+                             'executive', 'research', 'division', 'analyst', 'analysts',
+                             'page', 'edited', 'special', 'call', 'participants', 'version',
+                             'officer', 'head', 'content'}
+                if entity_text.lower() in skip_words:
                     continue
-                # Normalize label
-                if label.startswith("PERSON"):
-                    label = "PERSON"
-                elif label in ["ORG", "ORG_ACRONYM", "ENTITY"]:
-                    if any(org_word in entity_text for org_word in ['Inc', 'Corp', 'LLC', 'Department', 'Division', 'FDA', 'SEC']):
-                        label = "ORG"
-                    else:
-                        label = "ENTITY"
+                    
+                # Skip single letters or very short words
+                if len(entity_text) <= 2:
+                    continue
                 
-                # Avoid duplicates with different cases
-                entity_key = entity_text.lower()
-                if entity_key not in seen_entities:
-                    seen_entities.add(entity_key)
-                    entity_counter[entity_text] += 1
-                    entity_labels[entity_text] = label
+                # Normalize label
+                if "PERSON" in label:
+                    final_label = "PERSON"
+                elif label in ["ORG", "ORG_ACRONYM"] or any(org_word in entity_text for org_word in ['Inc', 'Corp', 'LLC', 'Company', 'Therapeutics', 'Pharmaceuticals', 'Bank', 'Capital']):
+                    final_label = "ORG"
+                else:
+                    final_label = "ENTITY"
+                
+                # Mark this position as used
+                used_positions.add((match_start, match_end))
+                
+                # Count this occurrence
+                entity_counter[entity_text] += 1
+                entity_labels[entity_text] = final_label
         
         # Get top K entities
         top_entities = []
